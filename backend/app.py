@@ -790,15 +790,17 @@ def get_tournaments():
 
 @app.route('/api/live-matches', methods=['GET'])
 def get_live_matches():
-    """Holt Live-Matches von TennisExplorer (funktioniert auch von Render)"""
+    """Holt die letzten Matches von TennisExplorer Results-Seite"""
 
     try:
-        print("📡 Lade Live-Matches von TennisExplorer...")
+        print("📡 Lade Matches von TennisExplorer Results...")
 
-        url = 'https://www.tennisexplorer.com/live/'
+        # Heutiges Datum für Filter
+        from datetime import datetime
+        today = datetime.now().strftime('%Y-%m-%d')
 
         response = requests.get(
-            url,
+            'https://www.tennisexplorer.com/results/?type=atp-single',
             headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -813,23 +815,40 @@ def get_live_matches():
 
         html = response.text
 
-        # Tabellen-Zeilen finden
-        rows = re.findall(r'<tr[^>]*class="[^"]*"[^>]*>(.*?)</tr>', html, re.DOTALL)
+        # Tabelle mit class="result" finden
+        table_match = re.search(
+            r'<table[^>]*class="result[^"]*"[^>]*>(.*?)</table>',
+            html,
+            re.DOTALL
+        )
+
+        if not table_match:
+            print("⚠️ Keine result-Tabelle gefunden")
+            return jsonify([])
+
+        table_html = table_match.group(1)
+
+        # Zeilen extrahieren
+        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', table_html, re.DOTALL)
 
         matches = []
+        current_tourney = None
 
         for row in rows:
-            # Spieler-Links finden
-            player_links = re.findall(
-                r'<td[^>]*class="[^"]*player[^"]*"[^>]*>.*?<a[^>]*>([^<]+)</a>',
+            # Turnier-Header-Zeile?
+            tourney_header = re.search(
+                r'<td[^>]*class="[^"]*t-name[^"]*"[^>]*>.*?<a[^>]*>([^<]+)</a>',
                 row, re.DOTALL
             )
+            if tourney_header and 'head' not in row.lower():
+                current_tourney = tourney_header.group(1).strip()
+                continue
 
-            # Fallback: Alle Links finden
-            if len(player_links) < 2:
-                all_links = re.findall(r'<a[^>]*href="[^"]*player[^"]*"[^>]*>([^<]+)</a>', row)
-                if len(all_links) >= 2:
-                    player_links = all_links[:2]
+            # Spieler-Links finden
+            player_links = re.findall(
+                r'<a[^>]*href="[^"]*/player/[^"]*"[^>]*>([^<]+)</a>',
+                row
+            )
 
             if len(player_links) < 2:
                 continue
@@ -837,98 +856,58 @@ def get_live_matches():
             player1 = player_links[0].strip()
             player2 = player_links[1].strip()
 
-            if not player1 or not player2 or len(player1) < 3 or len(player2) < 3:
+            if not player1 or not player2 or len(player1) < 2 or len(player2) < 2:
                 continue
 
             # Score extrahieren
+            score = '—'
             score_match = re.search(
                 r'<td[^>]*class="[^"]*score[^"]*"[^>]*>(.*?)</td>',
                 row, re.DOTALL
             )
-            if not score_match:
-                # Fallback: Alle Zellen durchsuchen
-                cells = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL)
-                score = '—'
-                for cell in cells:
-                    cell_clean = re.sub(r'<[^>]+>', '', cell).strip()
-                    if re.match(r'^[\d\s\-\:\(\)]+$', cell_clean) and len(cell_clean) > 2:
-                        score = cell_clean
-                        break
-            else:
+            if score_match:
                 score = re.sub(r'<[^>]+>', '', score_match.group(1)).strip()
 
-            if not score:
-                score = '—'
-
-            # Turnier extrahieren
-            tourney_match = re.search(
-                r'<td[^>]*class="[^"]*tourney[^"]*"[^>]*>.*?<a[^>]*>([^<]+)</a>',
+            # Ergebnis (✅/❌ für Sieger)
+            result = '—'
+            result_match = re.search(
+                r'<td[^>]*class="[^"]*result[^"]*"[^>]*>(.*?)</td>',
                 row, re.DOTALL
             )
-            if tourney_match:
-                tourney = tourney_match.group(1).strip()
-            else:
-                # Fallback: aus dem href
-                tourney_link = re.search(r'href="(/results/\?t=[^"]+)"', row)
-                tourney = 'Live'
+            if result_match:
+                result = re.sub(r'<[^>]+>', '', result_match.group(1)).strip()
 
-            # Status bestimmen (falls Spiel läuft vs beendet)
-            row_lower = row.lower()
-            if 'finished' in row_lower or 'ended' in row_lower:
-                status = 'finished'
-                status_display = '✅ Beendet'
-            else:
-                status = 'live'
-                status_display = '🟢 Live'
+            # Turnier aus dem Link extrahieren
+            tourney = current_tourney or 'Match'
+            tourney_match = re.search(r'href="(/[^"]+/\d{4}/[^"]+/)"', row)
+            if tourney_match:
+                tourney = tourney_match.group(1).split('/')[1].replace('-', ' ').title()
+
+            # Round extrahieren
+            round_match = re.search(
+                r'<td[^>]*class="[^"]*round[^"]*"[^>]*>(.*?)</td>',
+                row, re.DOTALL
+            )
+            round_str = ''
+            if round_match:
+                round_str = re.sub(r'<[^>]+>', '', round_match.group(1)).strip()
+
+            # Datum extrahieren
+            date_match = re.search(r'/results/(\d{4}-\d{2}-\d{2})/', row)
+            date_str = date_match.group(1) if date_match else today
 
             matches.append({
                 'player1': player1,
                 'player2': player2,
                 'score': score,
-                'status': status_display,
-                'raw_status': status,
-                'time': None,
-                'tourney': tourney
+                'status': '✅ Beendet',
+                'raw_status': 'finished',
+                'time': date_str,
+                'tourney': tourney,
+                'surface': '—',
+                'round': round_str,
+                'tour': 'ATP'
             })
-
-        # 🔥 Falls keine echten Live-Matches: Fallback mit den letzten Ergebnissen
-        if len(matches) == 0:
-            print("⚠️ Keine Live-Matches, versuche Ergebnisse-Seite...")
-            # Alternativ: /results/ Seite
-            alt_response = requests.get(
-                'https://www.tennisexplorer.com/results/',
-                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},
-                timeout=15
-            )
-
-            if alt_response.status_code == 200:
-                alt_rows = re.findall(r'<tr[^>]*>(.*?)</tr>', alt_response.text, re.DOTALL)
-                for row in alt_rows[:30]:
-                    links = re.findall(r'<a[^>]*href="[^"]*player[^"]*"[^>]*>([^<]+)</a>', row)
-                    if len(links) < 2:
-                        continue
-                    p1 = links[0].strip()
-                    p2 = links[1].strip()
-                    if not p1 or not p2:
-                        continue
-
-                    cells = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL)
-                    score = '—'
-                    for cell in cells:
-                        cell_clean = re.sub(r'<[^>]+>', '', cell).strip()
-                        if re.match(r'^[\d\s\-\:\(\)]+$', cell_clean) and len(cell_clean) > 2:
-                            score = cell_clean
-                            break
-
-                    matches.append({
-                        'player1': p1,
-                        'player2': p2,
-                        'score': score,
-                        'status': '✅ Beendet',
-                        'raw_status': 'finished',
-                        'time': None,
-                        'tourney': 'Ergebnis'
-                    })
 
         # Limitiere auf 12 Matches
         result = matches[:12]
@@ -941,65 +920,7 @@ def get_live_matches():
         return jsonify([])
 
 
-@app.route('/api/debug-results', methods=['GET'])
-def debug_results():
-    """Testet die TennisExplorer Results-Seite"""
-    results = {}
-    
-    # Variante 1: Ohne spezielle Header
-    try:
-        response = requests.get(
-            'https://www.tennisexplorer.com/results/',
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8',
-                'Cookie': 'euconsent-v2=accepted'  # Fake-Cookie um Banner zu umgehen
-            },
-            timeout=15
-        )
-        
-        html = response.text
-        results['status'] = response.status_code
-        results['length'] = len(html)
-        results['has_tables'] = '<table' in html
-        results['tables_count'] = html.count('<table')
-        results['has_score_class'] = 'score' in html.lower()
-        results['has_player_links'] = 'player' in html.lower()
-        
-        # Zeige die ersten relevanten Zeilen mit Tabellen
-        tables = re.findall(r'<table[^>]*class="[^"]*"[^>]*>', html)
-        results['table_classes'] = list(set(tables))[:10]
-        
-        # Zeige erste 3000 Zeichen
-        results['first_3000'] = html[:3000]
-        
-        # Suche nach Spielernamen
-        player_links = re.findall(r'<a[^>]*href="[^"]*player[^"]*"[^>]*>([^<]+)</a>', html)
-        results['player_count'] = len(player_links)
-        results['first_10_players'] = player_links[:10]
-        
-    except Exception as e:
-        results['error'] = str(e)
-    
-    # Variante 2: Alternative URL mit "?type=atp-single"
-    try:
-        response2 = requests.get(
-            'https://www.tennisexplorer.com/results/?type=atp-single',
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept-Language': 'de-DE,de;q=0.9',
-            },
-            timeout=15
-        )
-        results['alt_status'] = response2.status_code
-        results['alt_length'] = len(response2.text)
-        results['alt_player_count'] = len(re.findall(r'<a[^>]*href="[^"]*player[^"]*"[^>]*>([^<]+)</a>', response2.text))
-        
-    except Exception as e:
-        results['alt_error'] = str(e)
-    
-    return jsonify(results)
+
 
 
 # ============================================================
