@@ -943,48 +943,10 @@ def get_live_matches():
 
 @app.route('/api/debug-enetscores', methods=['GET'])
 def debug_enetscores():
-    """Analysiert die enetscores Konfig-Datei"""
+    """Sucht nach API-URLs im enetscores Widget-JS"""
     results = {}
     
-    # 1. Config-Datei (wsj) laden
-    try:
-        cfg_url = 'https://es-cfg.enetscores.com/wsj/11.647.0/FW6137D1984DA35ACE'
-        response = requests.get(
-            cfg_url,
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://www.tennisexplorer.com/'
-            },
-            timeout=10
-        )
-        
-        results['cfg_status'] = response.status_code
-        results['cfg_length'] = len(response.text)
-        results['cfg_content'] = response.text[:2000]  # Erste 2000 Zeichen
-        
-    except Exception as e:
-        results['cfg_error'] = str(e)
-    
-    # 2. JavaScript-Settings (ws) laden
-    try:
-        js_url = 'https://es-cfg.enetscores.com/ws/11.647.0/FW6137D1984DA35ACE'
-        response = requests.get(
-            js_url,
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://www.tennisexplorer.com/'
-            },
-            timeout=10
-        )
-        
-        results['js_status'] = response.status_code
-        results['js_length'] = len(response.text)
-        results['js_content'] = response.text[:2000]
-        
-    except Exception as e:
-        results['js_error'] = str(e)
-    
-    # 3. Live-Score JS (vue file) laden
+    # Vue JS laden (1,8 MB)
     try:
         vue_url = 'https://es-djs.enetscores.com/js/widget/livescore/tennis/v2.0.1/default/livescore.min.js?c=FW6137D1984DA35ACE_d41d8cd98f00b204e9800998ecf8427e'
         response = requests.get(
@@ -993,18 +955,38 @@ def debug_enetscores():
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'Referer': 'https://www.tennisexplorer.com/'
             },
-            timeout=10
+            timeout=15
         )
         
-        results['vue_status'] = response.status_code
-        results['vue_length'] = len(response.text)
+        js = response.text
+        results['js_length'] = len(js)
         
-        # Suche nach API-URLs im JS
-        api_patterns = re.findall(r'https?://[^\s\'"<>]*enetscores[^\s\'"<>]*', response.text)
-        results['vue_urls'] = list(set(api_patterns))[:30]
+        # Suche nach allen URLs
+        all_urls = re.findall(r'https?://[^\s\'"`<>\)]+', js)
+        results['all_urls'] = list(set(all_urls))[:50]
+        
+        # Suche nach API-Pfaden (relativ)
+        api_paths = re.findall(r'[\'"`](/(?:api|v\d|live|data|scores)[^\'"`]*)', js)
+        results['api_paths'] = list(set(api_paths))[:30]
+        
+        # Suche nach typischen API-Keywords
+        keywords = ['ajax', 'fetch', 'axios', 'xmlhttp', 'apiUrl', 'api_url', 'baseUrl', 'endpoint']
+        found_keywords = {}
+        for kw in keywords:
+            idx = js.lower().find(kw.lower())
+            if idx >= 0:
+                # Zeige 100 Zeichen um das Keyword
+                start = max(0, idx - 50)
+                end = min(len(js), idx + 150)
+                found_keywords[kw] = js[start:end]
+        results['keywords'] = found_keywords
+        
+        # Suche nach enetscores-Subdomains
+        subdomains = re.findall(r'https?://([a-z0-9\-]+)\.enetscores\.com', js)
+        results['subdomains'] = list(set(subdomains))
         
     except Exception as e:
-        results['vue_error'] = str(e)
+        results['error'] = str(e)
     
     return jsonify(results)
 
