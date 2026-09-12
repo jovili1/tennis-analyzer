@@ -943,41 +943,60 @@ def get_live_matches():
 
 @app.route('/api/debug-enetscores', methods=['GET'])
 def debug_enetscores():
-    """Testet verschiedene enetscores-Endpoints"""
+    """Analysiert die enetscores Widget-Datei"""
     results = {}
     
-    endpoints = [
-        'https://api.enetscores.com/live/events',
-        'https://api.enetscores.com/live',
-        'https://www.enetscores.com/api/live',
-        'https://api.enetscores.com/events/live',
-        'https://api.enetscores.com/v1/live/events',
-        'https://api.enetscores.com/matches',
-        'https://api.enetscores.com/events',
-        'https://www.enetscores.com/live-scores',
-        'https://widget.enetscores.com/FW6137D1984DA35ACE'
-    ]
+    # 1. Widget-JavaScript laden und nach URLs durchsuchen
+    try:
+        widget_url = 'https://widget.enetscores.com/FW6137D1984DA35ACE'
+        response = requests.get(
+            widget_url,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://www.tennisexplorer.com/'
+            },
+            timeout=10
+        )
+        
+        js = response.text
+        
+        # URLs aus dem JavaScript extrahieren
+        urls = re.findall(r'https?://[^\s\'"<>]+', js)
+        api_urls = [u for u in urls if 'api' in u.lower() or 'enetscores' in u.lower()]
+        
+        results['widget_urls'] = api_urls[:20]
+        results['widget_full_js'] = js  # Kompletter Code
+        
+    except Exception as e:
+        results['widget_error'] = str(e)
     
-    for url in endpoints:
-        try:
-            response = requests.get(
-                url,
-                headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept': 'application/json, text/html, */*',
-                    'Referer': 'https://www.enetscores.com/'
-                },
-                timeout=10,
-                allow_redirects=True
-            )
-            results[url] = {
-                'status': response.status_code,
-                'content_type': response.headers.get('Content-Type', ''),
-                'length': len(response.text),
-                'first_300': response.text[:300]
-            }
-        except Exception as e:
-            results[url] = {'error': str(e)}
+    # 2. Hauptseite scrapen
+    try:
+        main_url = 'https://www.enetscores.com/live-scores'
+        response = requests.get(
+            main_url,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            },
+            timeout=10
+        )
+        
+        html = response.text
+        
+        # Suche nach JavaScript-URLs und API-Endpoints
+        scripts = re.findall(r'<script[^>]*src="([^"]+)"', html)
+        results['main_scripts'] = scripts[:20]
+        
+        # Suche nach iframes
+        iframes = re.findall(r'<iframe[^>]*src="([^"]+)"', html)
+        results['main_iframes'] = iframes[:10]
+        
+        # Suche nach API-URLs im HTML
+        api_urls = re.findall(r'https?://[^\s\'"<>]*(?:api|json|data)[^\s\'"<>]*', html)
+        results['main_api_urls'] = list(set(api_urls))[:20]
+        
+    except Exception as e:
+        results['main_error'] = str(e)
     
     return jsonify(results)
 
