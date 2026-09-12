@@ -10,7 +10,7 @@ window.globalDbWTA = null;
 window.currentRankingType = 'atp';
 
 // ===== ZIP-QUELLE (GitHub Releases) =====
-const DB_RELEASE_URL = 'https://api.allorigins.win/raw?url=https%3A%2F%2Fgithub.com%2Fjovili1%2Ftennis-analyzer%2Freleases%2Fdownload%2Fv1.0.0';
+const DB_RELEASE_URL = 'https://jovili1.github.io/tennis-analyzer/dbs';
 
 // ===== ZIP-ENTPACKUNG (aus GitHub Releases) =====
 async function loadZippedDatabase(zipUrl) {
