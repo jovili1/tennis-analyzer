@@ -941,6 +941,47 @@ def get_live_matches():
         return jsonify([])
 
 
+@app.route('/api/debug-enetscores', methods=['GET'])
+def debug_enetscores():
+    """Testet verschiedene enetscores-Endpoints"""
+    results = {}
+    
+    endpoints = [
+        'https://api.enetscores.com/live/events',
+        'https://api.enetscores.com/live',
+        'https://www.enetscores.com/api/live',
+        'https://api.enetscores.com/events/live',
+        'https://api.enetscores.com/v1/live/events',
+        'https://api.enetscores.com/matches',
+        'https://api.enetscores.com/events',
+        'https://www.enetscores.com/live-scores',
+        'https://widget.enetscores.com/FW6137D1984DA35ACE'
+    ]
+    
+    for url in endpoints:
+        try:
+            response = requests.get(
+                url,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'application/json, text/html, */*',
+                    'Referer': 'https://www.enetscores.com/'
+                },
+                timeout=10,
+                allow_redirects=True
+            )
+            results[url] = {
+                'status': response.status_code,
+                'content_type': response.headers.get('Content-Type', ''),
+                'length': len(response.text),
+                'first_300': response.text[:300]
+            }
+        except Exception as e:
+            results[url] = {'error': str(e)}
+    
+    return jsonify(results)
+
+
 # ============================================================
 # START
 # ============================================================
