@@ -5,11 +5,11 @@
 console.log('🔥 match_predictor.js wird geladen...');
 
 // ===== API-URL (lokal vs. online) =====
-const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+var API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? ''
     : 'https://tennis-analyzer-api.onrender.com';
 
-const BACKEND_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+var BACKEND_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? '..'
     : 'https://jovili1.github.io/tennis-analyzer';
 
