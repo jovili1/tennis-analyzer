@@ -797,7 +797,16 @@ def get_live_matches():
 
         url = 'https://sportscore.com/api/widget/matches/?sport=tennis&limit=20'
 
-        response = requests.get(url, timeout=10)
+        # 🔥 FIX: User-Agent mitsenden (sonst blockt SportScore)
+        response = requests.get(
+            url,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json',
+                'Referer': 'https://sportscore.com/'
+            },
+            timeout=10
+        )
 
         if response.status_code != 200:
             print(f"❌ API antwortet mit {response.status_code}")
