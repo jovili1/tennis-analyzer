@@ -4,6 +4,15 @@
 
 console.log('🔥 match_predictor.js wird geladen...');
 
+// ===== API-URL (lokal vs. online) =====
+const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? ''
+    : 'https://tennis-analyzer-api.onrender.com';
+
+const BACKEND_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? '..'
+    : 'https://jovili1.github.io/tennis-analyzer';
+
 let predictorState = {
     type: 'atp',
     player1: null,
@@ -76,17 +85,29 @@ async function loadMatchDb(type) {
 
     console.warn(`⚠️ Keine globale DB, lade direkt...`);
     try {
-        const filename = type === 'atp' ? 'atp_matches.db' : 'wta_matches.db';
-        const res = await fetch(`../backend/spieler/${filename}`);
-        if (!res.ok) throw new Error(`${filename} nicht gefunden`);
-        const buf = await res.arrayBuffer();
-        const SQL = await initSqlJs({ locateFile: f => `https://sql.js.org/dist/${f}` });
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        let dbBytes;
 
-        if (predictorState.matchDb) {
-            try { predictorState.matchDb.close(); } catch(e) {}
+        if (isLocal) {
+            const filename = type === 'atp' ? 'atp_matches.db' : 'wta_matches.db';
+            const res = await fetch(`${BACKEND_URL}/backend/spieler/${filename}`);
+            if (!res.ok) throw new Error(`${filename} nicht gefunden`);
+            dbBytes = new Uint8Array(await res.arrayBuffer());
+        } else {
+            const zipName = type === 'atp' ? 'atp_matches.zip' : 'wta_matches.zip';
+            const zipUrl = `${BACKEND_URL}/dbs/${zipName}`;
+            console.log(`📦 Lade ZIP: ${zipUrl}`);
+            const res = await fetch(zipUrl);
+            if (!res.ok) throw new Error(`${zipName} nicht gefunden`);
+            const zipBuf = await res.arrayBuffer();
+            const unzipped = fflate.unzipSync(new Uint8Array(zipBuf));
+            const filename = Object.keys(unzipped)[0];
+            dbBytes = unzipped[filename];
         }
 
-        predictorState.matchDb = new SQL.Database(new Uint8Array(buf));
+        const SQL = await initSqlJs({ locateFile: f => `https://sql.js.org/dist/${f}` });
+
+        predictorState.matchDb = new SQL.Database(dbBytes);
         predictorState.matchDb._type = type;
         window.dbMatches = predictorState.matchDb;
 
@@ -252,7 +273,7 @@ function getTournamentByName(name) {
 
 async function loadEloForPlayer(playerName, surface = 'Rolling_Gesamt') {
     try {
-        const response = await fetch(`/api/elo?name=${encodeURIComponent(playerName)}&surface=${surface}`);
+        const response = await fetch(`${API_URL}/api/elo?name=${encodeURIComponent(playerName)}&surface=${surface}`);
         if (!response.ok) {
             console.warn(`⚠️ Keine ELO für ${playerName} (${response.status})`);
             return null;
@@ -811,7 +832,6 @@ async function calculatePrediction() {
 
         const surfaceEloMap = { 'Hartplatz': 'hard_elo', 'Sand': 'clay_elo', 'Rasen': 'grass_elo' };
 
-        // ===== Spieler 1 =====
         let surfaceElo1, combinedElo1;
         let p1WinRateFromDb = 0;
         if (!p1HasElo) {
@@ -831,7 +851,6 @@ async function calculatePrediction() {
             combinedElo1 = (elos1?.elo || 1500) * 0.5 + surfaceElo1 * 0.5;
         }
 
-        // ===== Spieler 2 =====
         let surfaceElo2, combinedElo2;
         let p2WinRateFromDb = 0;
         if (!p2HasElo) {
@@ -859,10 +878,8 @@ async function calculatePrediction() {
         const fairOdds1 = 100 / finalProb;
         const fairOdds2 = 100 / prob2;
 
-        // 🔥 H2H laden (loadH2HData – neuer Name!)
         const h2h = await loadH2HData(p1.name, p2.name);
 
-        // 🔥 Confidence berechnen
         const eloDiff = Math.abs(combinedElo1 - combinedElo2);
         const confidenceData = calculateConfidence(p1HasElo, p2HasElo, elos1, elos2, h2h, eloDiff);
 
@@ -1173,7 +1190,6 @@ function renderMatchPredictor() {
             `;
         }
 
-        // 🔥 H2H-Anzeige
         let h2hHtml = '';
         if (h2h && h2h.total > 0) {
             h2hHtml = `
@@ -1248,7 +1264,6 @@ function renderMatchPredictor() {
 
             ${h2hHtml}
 
-            <!-- Spieler 1 -->
             <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;margin-top:16px;">
                 <div style="color:#2ecc71;font-size:16px;font-weight:600;margin-bottom:12px;">${p1.name}</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -1280,7 +1295,6 @@ function renderMatchPredictor() {
                 </div>
             </div>
 
-            <!-- Spieler 2 -->
             <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;margin-top:12px;">
                 <div style="color:#e74c3c;font-size:16px;font-weight:600;margin-bottom:12px;">${p2.name}</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -1410,7 +1424,6 @@ function renderMatchPredictor() {
         </div>
     `;
 
-    // ===== EVENTS =====
     document.getElementById('predBtnAtp').onclick = () => switchPredictorType('atp');
     document.getElementById('predBtnWta').onclick = () => switchPredictorType('wta');
 
@@ -1781,7 +1794,7 @@ async function updateElos() {
     status.style.color = '#f1c40f';
 
     try {
-        const response = await fetch('/api/update-elo', { method: 'POST' });
+        const response = await fetch(`${API_URL}/api/update-elo`, { method: 'POST' });
         const data = await response.json();
 
         if (data.success) {
@@ -1810,7 +1823,7 @@ async function updateElos() {
 
 async function loadLastUpdateDate() {
     try {
-        const response = await fetch('/api/elo/last-update');
+        const response = await fetch(`${API_URL}/api/elo/last-update`);
         const data = await response.json();
 
         const status = document.getElementById('eloUpdateStatus');

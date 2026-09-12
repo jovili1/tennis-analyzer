@@ -2,6 +2,15 @@
 
 console.log('🔄 players.js wird geladen...');
 
+// ===== API-URL (lokal vs. online) =====
+const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? ''
+    : 'https://tennis-analyzer-api.onrender.com';
+
+const BACKEND_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? '..'
+    : 'https://jovili1.github.io/tennis-analyzer';
+
 let playerData = [];
 let currentRankingType = 'atp';
 let dbATP = null;
@@ -43,13 +52,13 @@ const TOP_PLAYERS_WTA = [
 ];
 
 // ===== KONFIGURATION =====
-const PLAYER_DATA_PATH = '../backend/spieler/';
-const MATCH_DATA_PATH = '../backend/spieler/';
+const PLAYER_DATA_PATH = `${BACKEND_URL}/backend/spieler/`;
+const MATCH_DATA_PATH = `${BACKEND_URL}/backend/spieler/`;
 const ATP_DB_FILENAME = 'atp_players.db';
 const WTA_DB_FILENAME = 'wta_players.db';
 const ATP_MATCHES_FILENAME = 'atp_matches.db';
 const WTA_MATCHES_FILENAME = 'wta_matches.db';
-const RANKING_PATH = '../backend/ranglisten/';
+const RANKING_PATH = `${BACKEND_URL}/backend/ranglisten/`;
 
 // ===== PERFORMANCE: CACHE-KEYS =====
 const CACHE_WIKIDATA_PREFIX = 'wikidata_img_';
@@ -338,7 +347,7 @@ function getPlayerPoints(playerName, rankingType) {
 
 async function getPlayerElo(playerName) {
     try {
-        const response = await fetch(`/api/elo?name=${encodeURIComponent(playerName)}&surface=Rolling_Gesamt`);
+        const response = await fetch(`${API_URL}/api/elo?name=${encodeURIComponent(playerName)}&surface=Rolling_Gesamt`);
         if (!response.ok) {
             console.warn(`⚠️ Keine ELO für ${playerName} (${response.status})`);
             return null;
@@ -696,14 +705,29 @@ async function initMatchDatabase(rankingType) {
 
     window._dbLoading[type] = (async () => {
         try {
-            const filename = type === 'atp' ? ATP_MATCHES_FILENAME : WTA_MATCHES_FILENAME;
-            const response = await fetch(`${MATCH_DATA_PATH}${filename}`);
-            if (!response.ok) throw new Error(`${filename} nicht gefunden!`);
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            let dbBytes;
 
-            const arrayBuffer = await response.arrayBuffer();
+            if (isLocal) {
+                const filename = type === 'atp' ? 'atp_matches.db' : 'wta_matches.db';
+                const response = await fetch(`${MATCH_DATA_PATH}${filename}`);
+                if (!response.ok) throw new Error(`${filename} nicht gefunden!`);
+                dbBytes = new Uint8Array(await response.arrayBuffer());
+            } else {
+                const zipName = type === 'atp' ? 'atp_matches.zip' : 'wta_matches.zip';
+                const zipUrl = `${BACKEND_URL}/dbs/${zipName}`;
+                console.log(`📦 Lade ZIP: ${zipUrl}`);
+                const response = await fetch(zipUrl);
+                if (!response.ok) throw new Error(`${zipName} nicht gefunden!`);
+                const zipBuf = await response.arrayBuffer();
+                const unzipped = fflate.unzipSync(new Uint8Array(zipBuf));
+                const filename = Object.keys(unzipped)[0];
+                dbBytes = unzipped[filename];
+            }
+
             const SQL = await initSqlJs({ locateFile: file => `https://sql.js.org/dist/${file}` });
 
-            const db = new SQL.Database(new Uint8Array(arrayBuffer));
+            const db = new SQL.Database(dbBytes);
             db._rankingType = type;
             db._type = type;
 
@@ -713,7 +737,7 @@ async function initMatchDatabase(rankingType) {
                 window.globalDbWTA = db;
             }
 
-            console.log(`✅ ${type.toUpperCase()} Match-DB global gespeichert (${(arrayBuffer.byteLength/1024/1024).toFixed(1)} MB)`);
+            console.log(`✅ ${type.toUpperCase()} Match-DB global gespeichert (${(dbBytes.byteLength/1024/1024).toFixed(1)} MB)`);
             delete window._dbLoading[type];
             return db;
         } catch (error) {
@@ -1437,14 +1461,12 @@ function closeLightbox() {
 // ===== DETAILANSICHT =====
 // =====================================================
 
-// 🔥 FIX: rankingTypeOverride Parameter hinzugefügt
 async function showPlayerDetailById(playerId, rankingTypeOverride) {
     if (!playerId) {
         console.error('❌ Keine player_id übergeben!');
         return;
     }
 
-    // 🔥 Ranking-Type EXPLIZIT setzen – verhindert Race Condition
     let rankingType = rankingTypeOverride || currentRankingType || 'atp';
     currentRankingType = rankingType;
     window.currentRankingType = rankingType;
@@ -1520,7 +1542,6 @@ async function showPlayerDetail(index) {
 
     var p = data[index];
     if (p && p.player_id) {
-        // 🔥 currentRankingType explizit übergeben
         showPlayerDetailById(p.player_id, currentRankingType);
     } else {
         console.error('❌ Spieler nicht gefunden! Index:', index);
@@ -1791,7 +1812,6 @@ window.getPlayerMatchStats = getPlayerMatchStats;
 window.TOP_PLAYERS_ATP = TOP_PLAYERS_ATP;
 window.TOP_PLAYERS_WTA = TOP_PLAYERS_WTA;
 
-// 🔥 initDatabase global verfügbar (wird von ranking.js gebraucht!)
 window.initDatabase = initDatabase;
 window.initMatchDatabase = initMatchDatabase;
 

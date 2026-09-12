@@ -2,6 +2,15 @@
 
 console.log('🔥 dashboard.js wird geladen...');
 
+// ===== API-URL (lokal vs. online) =====
+const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? ''
+    : 'https://tennis-analyzer-api.onrender.com';
+
+const BACKEND_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? '..'
+    : 'https://jovili1.github.io/tennis-analyzer';
+
 // Blink-Animation für LIVE-Badge
 const styleBlink = document.createElement('style');
 styleBlink.textContent = `
@@ -231,7 +240,7 @@ async function loadRankingDataForDashboard(tour) {
     }
 
     const filename = tour === 'ATP' ? 'atp_ranking.json' : 'wta_ranking.json';
-    const url = `../backend/ranglisten/${filename}`;
+    const url = `${BACKEND_URL}/backend/ranglisten/${filename}`;
 
     console.log(`📥 Lade Ranking: ${url}`);
 
@@ -347,7 +356,7 @@ async function loadTopPlayers(tour) {
                 <div style="background:${bg};border:1px solid ${border};border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px;transition:0.2s;cursor:pointer;"
                      onmouseover="this.style.background='${bg.replace('0.12', '0.2').replace('0.03', '0.06')}'"
                      onmouseout="this.style.background='${bg}'"
-                     onclick="if (typeof showPlayerDetailById === 'function') { showPlayerDetailById(${p.player_id}, '${tour.toLowerCase()}'); }" else { console.error('showPlayerDetailById nicht gefunden'); }">
+                     onclick="if (typeof showPlayerDetailById === 'function') { showPlayerDetailById(${p.player_id}, '${tour.toLowerCase()}'); } else { console.error('showPlayerDetailById nicht gefunden'); }">
                     <span style="color:${color};font-weight:700;font-size:14px;min-width:28px;">#${p.ranking}</span>
                     <div style="flex:1;min-width:0;">
                         <div style="color:#e0e6f0;font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div>
@@ -406,7 +415,7 @@ async function loadLatestMatches() {
     `;
 
     try {
-        const response = await fetch('/api/live-matches');
+        const response = await fetch(`${API_URL}/api/live-matches`);
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -496,7 +505,7 @@ async function loadTournaments() {
 
     try {
         console.log('📥 Lade Turniere über Backend-Proxy...');
-        const response = await fetch('/api/tournaments');
+        const response = await fetch(`${API_URL}/api/tournaments`);
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);

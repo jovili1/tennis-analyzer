@@ -4,6 +4,15 @@
 
 console.log('🔥 h2h.js wird geladen...');
 
+// ===== API-URL (lokal vs. online) =====
+const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? ''
+    : 'https://tennis-analyzer-api.onrender.com';
+
+const BACKEND_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? '..'
+    : 'https://jovili1.github.io/tennis-analyzer';
+
 let h2hState = {
     type: 'atp',
     player1: null,
@@ -63,13 +72,29 @@ async function loadMatchDb(type) {
 
     console.warn(`⚠️ Keine globale DB, lade direkt...`);
     try {
-        const filename = type === 'atp' ? 'atp_matches.db' : 'wta_matches.db';
-        const res = await fetch(`../backend/spieler/${filename}`);
-        if (!res.ok) throw new Error(`${filename} nicht gefunden`);
-        const buf = await res.arrayBuffer();
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        let dbBytes;
+
+        if (isLocal) {
+            const filename = type === 'atp' ? 'atp_matches.db' : 'wta_matches.db';
+            const res = await fetch(`${BACKEND_URL}/backend/spieler/${filename}`);
+            if (!res.ok) throw new Error(`${filename} nicht gefunden`);
+            dbBytes = new Uint8Array(await res.arrayBuffer());
+        } else {
+            const zipName = type === 'atp' ? 'atp_matches.zip' : 'wta_matches.zip';
+            const zipUrl = `${BACKEND_URL}/dbs/${zipName}`;
+            console.log(`📦 Lade ZIP: ${zipUrl}`);
+            const res = await fetch(zipUrl);
+            if (!res.ok) throw new Error(`${zipName} nicht gefunden`);
+            const zipBuf = await res.arrayBuffer();
+            const unzipped = fflate.unzipSync(new Uint8Array(zipBuf));
+            const filename = Object.keys(unzipped)[0];
+            dbBytes = unzipped[filename];
+        }
+
         const SQL = await initSqlJs({ locateFile: f => `https://sql.js.org/dist/${f}` });
 
-        const db = new SQL.Database(new Uint8Array(buf));
+        const db = new SQL.Database(dbBytes);
         db._type = type;
         db._rankingType = type;
 
@@ -428,7 +453,6 @@ function renderPrediction(p1, p2, matches, surface) {
     let reasons = [];
     let hasData = false;
 
-    // 1. H2H-Bilanz
     if (p1Rate > p2Rate) {
         const diff = Math.min(15, Math.round((p1Rate - p2Rate) / 3));
         p1Score += diff;
@@ -445,10 +469,9 @@ function renderPrediction(p1, p2, matches, surface) {
         reasons.push(`⚖️ Direkter Vergleich ist ausgeglichen (${p1Wins}-${p2Wins})`);
     }
 
-    // 2. Belag (mit korrektem Label)
     const surfaceLabel = getSurfaceLabel(surface);
     if (isAllSurface) {
-        // Bei "Alle" nicht nochmal dieselbe Statistik anzeigen – skip
+        // Skip
     } else if (surfTotal >= 3) {
         if (surfP1Rate > surfP2Rate) {
             const diff = Math.min(12, Math.round((surfP1Rate - surfP2Rate) / 4));
@@ -469,7 +492,6 @@ function renderPrediction(p1, p2, matches, surface) {
         reasons.push(`🏟️ Zu wenige Daten auf ${surfaceLabel} (${surfTotal} Matches) – neutral bewertet`);
     }
 
-    // 3. Letzte 5 H2H
     if (last5.length >= 3) {
         if (last5P1 > last5P2) {
             const diff = Math.min(10, Math.round((last5P1 - last5P2) * 2.5));
@@ -490,7 +512,6 @@ function renderPrediction(p1, p2, matches, surface) {
         reasons.push(`📈 Zu wenige aktuelle Daten (${last5.length} Matches) – neutral bewertet`);
     }
 
-    // 4. Gesamtbilanz
     const totalDiff = Math.abs(p1Wins - p2Wins);
     if (totalDiff >= 5) {
         const diff = Math.min(8, Math.round(totalDiff / 2));
@@ -524,19 +545,16 @@ function renderPrediction(p1, p2, matches, surface) {
     const winnerColor = p1Score > p2Score ? '#2ecc71' : (p2Score > p1Score ? '#e74c3c' : '#f1c40f');
     const winnerEmoji = p1Score > p2Score ? '🏆' : (p2Score > p1Score ? '🏆' : '⚖️');
 
-    // 🔥 Confidence mit gemeinsamer Logik
     const confidenceData = calculateConfidence(
-        true, true,  // beide haben ELO (sonst gäbe es keine H2H)
-        { matches: 0 }, { matches: 0 },  // Match-Anzahl kennen wir hier nicht – wird durch H2H-Daten getragen
+        true, true,
+        { matches: 0 }, { matches: 0 },
         { total: total },
         0
     );
-    // 🔥 Direkte Anpassung: Wenn H2H >= 10 → Hoch, >= 5 → Mittel-Hoch
     let confidence = confidenceData.confidence;
     let confidenceLabel = confidenceData.label;
     let confidenceReason = confidenceData.reason;
 
-    // Für H2H-Modul spezifisch: Direkte Duelle sind das wichtigste Signal
     if (total >= 20) {
         confidence = 10; confidenceLabel = 'Sehr hoch';
         confidenceReason = `${total} direkte Duelle – sehr aussagekräftig`;
@@ -603,7 +621,7 @@ function renderPrediction(p1, p2, matches, surface) {
 
 async function loadEloForPlayer(playerName, surface = 'Rolling_Gesamt') {
     try {
-        const response = await fetch(`/api/elo?name=${encodeURIComponent(playerName)}&surface=${surface}`);
+        const response = await fetch(`${API_URL}/api/elo?name=${encodeURIComponent(playerName)}&surface=${surface}`);
         if (!response.ok) {
             console.warn(`⚠️ Keine ELO für ${playerName} (${response.status})`);
             return null;
@@ -744,7 +762,6 @@ async function loadH2HStats() {
         const p1Rate = total > 0 ? Math.round((p1Wins / total) * 100) : 0;
         const p2Rate = total > 0 ? Math.round((p2Wins / total) * 100) : 0;
 
-        // ===== BELAG =====
         const surfaceStats = {};
         const surfEmoji = { 'Hard': '🏟️', 'Clay': '🧱', 'Grass': '🌿', 'Carpet': '🟫' };
         for (const m of matches) {
@@ -767,7 +784,6 @@ async function loadH2HStats() {
             `;
         }
 
-        // ===== LETZTE 10 =====
         const H2H_LAST = 10;
         const last = matches.slice(0, H2H_LAST);
         let lastRows = '', lastP1 = 0, lastP2 = 0;
@@ -794,7 +810,6 @@ async function loadH2HStats() {
             </div>
         ` : '';
 
-        // ===== TURNIER-KATEGORIEN =====
         const cats = {
             'Grand Slam': { kw: ['australian open', 'french open', 'roland garros', 'wimbledon', 'us open'], m: [], p1: 0, p2: 0 },
             'Masters 1000': { kw: ['indian wells', 'miami', 'monte carlo', 'madrid', 'rome', 'canada', 'cincinnati', 'shanghai', 'paris'], m: [], p1: 0, p2: 0 },
@@ -833,7 +848,6 @@ async function loadH2HStats() {
             `;
         }
 
-        // ===== SETS =====
         let tSetsP1 = 0, tSetsP2 = 0, m3 = 0, m5 = 0, p1m3 = 0, p2m3 = 0, p1m5 = 0, p2m5 = 0, tbP1 = 0, tbP2 = 0;
         for (const m of matches) {
             const sets = (m.score || '').split(' ');
@@ -861,7 +875,6 @@ async function loadH2HStats() {
         const rate5 = m5 > 0 ? Math.round((p1m5 / m5) * 100) : 0;
         const tbRate = (tbP1 + tbP2) > 0 ? Math.round((tbP1 / (tbP1 + tbP2)) * 100) : 0;
 
-        // ===== JAHRESWEISE =====
         const yearStats = {};
         for (const m of matches) {
             const d = m.tourney_date ? String(m.tourney_date) : '';
@@ -888,7 +901,6 @@ async function loadH2HStats() {
             `;
         }
 
-        // ===== TIE-BREAK DETAILS =====
         let tbMatches = [];
         for (const m of matches) {
             const sets = (m.score || '').split(' ');
@@ -924,7 +936,6 @@ async function loadH2HStats() {
             `;
         }
 
-        // ===== HTML RENDERN =====
         container.innerHTML = `
             <div style="display:flex;flex-direction:column;gap:16px;margin-top:16px;">
                 ${eloHtml}
@@ -1037,7 +1048,6 @@ async function loadH2HStats() {
             </div>
         `;
 
-        // ===== EVENT FÜR VORHERSAGE-BELAG =====
         const surfaceSelect = document.getElementById('predictionSurface');
         if (surfaceSelect) {
             surfaceSelect.onchange = function() {
