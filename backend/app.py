@@ -790,79 +790,150 @@ def get_tournaments():
 
 @app.route('/api/live-matches', methods=['GET'])
 def get_live_matches():
-    """Holt Matches von der SportScore API (Backend-Proxy)"""
+    """Holt Live-Matches von TennisExplorer (funktioniert auch von Render)"""
 
     try:
-        print("📡 Lade Matches von SportScore API...")
+        print("📡 Lade Live-Matches von TennisExplorer...")
 
-        url = 'https://sportscore.com/api/widget/matches/?sport=tennis&limit=20'
+        url = 'https://www.tennisexplorer.com/live/'
 
-        # 🔥 FIX: User-Agent mitsenden (sonst blockt SportScore)
         response = requests.get(
             url,
             headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'application/json',
-                'Referer': 'https://sportscore.com/'
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8'
             },
-            timeout=10
+            timeout=15
         )
 
         if response.status_code != 200:
-            print(f"❌ API antwortet mit {response.status_code}")
+            print(f"❌ TennisExplorer antwortet mit {response.status_code}")
             return jsonify([])
 
-        data = response.json()
+        html = response.text
+
+        # Tabellen-Zeilen finden
+        rows = re.findall(r'<tr[^>]*class="[^"]*"[^>]*>(.*?)</tr>', html, re.DOTALL)
+
         matches = []
 
-        print(f"📡 API liefert {len(data.get('matches', []))} Matches")
+        for row in rows:
+            # Spieler-Links finden
+            player_links = re.findall(
+                r'<td[^>]*class="[^"]*player[^"]*"[^>]*>.*?<a[^>]*>([^<]+)</a>',
+                row, re.DOTALL
+            )
 
-        if data and 'matches' in data:
-            for match in data['matches']:
-                player1 = match.get('home', '').strip()
-                player2 = match.get('away', '').strip()
+            # Fallback: Alle Links finden
+            if len(player_links) < 2:
+                all_links = re.findall(r'<a[^>]*href="[^"]*player[^"]*"[^>]*>([^<]+)</a>', row)
+                if len(all_links) >= 2:
+                    player_links = all_links[:2]
 
-                if not player1 or not player2 or len(player1) < 2 or len(player2) < 2:
-                    continue
+            if len(player_links) < 2:
+                continue
 
-                home_score = match.get('home_score', '0')
-                away_score = match.get('away_score', '0')
+            player1 = player_links[0].strip()
+            player2 = player_links[1].strip()
 
-                if home_score and away_score:
-                    score = f"{home_score}-{away_score}"
-                else:
+            if not player1 or not player2 or len(player1) < 3 or len(player2) < 3:
+                continue
+
+            # Score extrahieren
+            score_match = re.search(
+                r'<td[^>]*class="[^"]*score[^"]*"[^>]*>(.*?)</td>',
+                row, re.DOTALL
+            )
+            if not score_match:
+                # Fallback: Alle Zellen durchsuchen
+                cells = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL)
+                score = '—'
+                for cell in cells:
+                    cell_clean = re.sub(r'<[^>]+>', '', cell).strip()
+                    if re.match(r'^[\d\s\-\:\(\)]+$', cell_clean) and len(cell_clean) > 2:
+                        score = cell_clean
+                        break
+            else:
+                score = re.sub(r'<[^>]+>', '', score_match.group(1)).strip()
+
+            if not score:
+                score = '—'
+
+            # Turnier extrahieren
+            tourney_match = re.search(
+                r'<td[^>]*class="[^"]*tourney[^"]*"[^>]*>.*?<a[^>]*>([^<]+)</a>',
+                row, re.DOTALL
+            )
+            if tourney_match:
+                tourney = tourney_match.group(1).strip()
+            else:
+                # Fallback: aus dem href
+                tourney_link = re.search(r'href="(/results/\?t=[^"]+)"', row)
+                tourney = 'Live'
+
+            # Status bestimmen (falls Spiel läuft vs beendet)
+            row_lower = row.lower()
+            if 'finished' in row_lower or 'ended' in row_lower:
+                status = 'finished'
+                status_display = '✅ Beendet'
+            else:
+                status = 'live'
+                status_display = '🟢 Live'
+
+            matches.append({
+                'player1': player1,
+                'player2': player2,
+                'score': score,
+                'status': status_display,
+                'raw_status': status,
+                'time': None,
+                'tourney': tourney
+            })
+
+        # 🔥 Falls keine echten Live-Matches: Fallback mit den letzten Ergebnissen
+        if len(matches) == 0:
+            print("⚠️ Keine Live-Matches, versuche Ergebnisse-Seite...")
+            # Alternativ: /results/ Seite
+            alt_response = requests.get(
+                'https://www.tennisexplorer.com/results/',
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},
+                timeout=15
+            )
+
+            if alt_response.status_code == 200:
+                alt_rows = re.findall(r'<tr[^>]*>(.*?)</tr>', alt_response.text, re.DOTALL)
+                for row in alt_rows[:30]:
+                    links = re.findall(r'<a[^>]*href="[^"]*player[^"]*"[^>]*>([^<]+)</a>', row)
+                    if len(links) < 2:
+                        continue
+                    p1 = links[0].strip()
+                    p2 = links[1].strip()
+                    if not p1 or not p2:
+                        continue
+
+                    cells = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL)
                     score = '—'
+                    for cell in cells:
+                        cell_clean = re.sub(r'<[^>]+>', '', cell).strip()
+                        if re.match(r'^[\d\s\-\:\(\)]+$', cell_clean) and len(cell_clean) > 2:
+                            score = cell_clean
+                            break
 
-                status = match.get('status', 'unknown')
-                if status == 'live' or status == 'inprogress':
-                    status_display = '🟢 Live'
-                elif status == 'finished':
-                    status_display = '✅ Beendet'
-                else:
-                    status_display = status
+                    matches.append({
+                        'player1': p1,
+                        'player2': p2,
+                        'score': score,
+                        'status': '✅ Beendet',
+                        'raw_status': 'finished',
+                        'time': None,
+                        'tourney': 'Ergebnis'
+                    })
 
-                time = match.get('time', None)
+        # Limitiere auf 12 Matches
+        result = matches[:12]
 
-                matches.append({
-                    'player1': player1,
-                    'player2': player2,
-                    'score': score,
-                    'status': status_display,
-                    'raw_status': status,
-                    'time': time
-                })
-
-        matches.sort(key=lambda x: (
-            0 if x['raw_status'] in ['live', 'inprogress'] else 1,
-            x.get('time', '') if x.get('time') else ''
-        ), reverse=True)
-
-        if len(matches) > 12:
-            result = matches[:12]
-        else:
-            result = matches
-
-        print(f"✅ {len(result)} Matches geladen (von {len(matches)} verfügbar)")
+        print(f"✅ {len(result)} Matches geladen von TennisExplorer")
         return jsonify(result)
 
     except Exception as e:
