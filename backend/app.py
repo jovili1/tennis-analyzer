@@ -963,6 +963,71 @@ def get_live_matches():
         traceback.print_exc()
         return jsonify([])
 
+@app.route('/api/debug-results', methods=['GET'])
+def debug_results():
+    """Zeigt die echte Zeilen-Struktur"""
+    try:
+        response = requests.get(
+            'https://www.tennisexplorer.com/results/?type=atp-single',
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml',
+                'Accept-Language': 'de-DE,de;q=0.9'
+            },
+            timeout=15
+        )
+        
+        html = response.text
+        
+        # Finde größte result-Tabelle
+        all_tables = []
+        search_pos = 0
+        while True:
+            ts = html.find('<table class="result', search_pos)
+            if ts == -1: break
+            te = html.find('</table>', ts)
+            if te != -1:
+                all_tables.append(html[ts:te+8])
+            search_pos = ts + 20
+        
+        biggest = max(all_tables, key=len)
+        
+        # Extrahiere alle Zeilen
+        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', biggest, re.DOTALL)
+        
+        # Prüfe die ersten 10 Zeilen
+        samples = []
+        for i, row in enumerate(rows[:10]):
+            has_td = '<td' in row
+            has_player = '/player/' in row
+            has_tname = 't-name' in row
+            has_fRow = 'fRow' in row
+            
+            samples.append({
+                'index': i,
+                'length': len(row),
+                'has_td': has_td,
+                'has_player_link': has_player,
+                'has_tname_class': has_tname,
+                'has_fRow': has_fRow,
+                'first_300': row[:300]
+            })
+        
+        # Zähle wie viele Zeilen player-links haben
+        player_rows = sum(1 for r in rows if '/player/' in r)
+        fRow_rows = sum(1 for r in rows if 'fRow' in r)
+        tname_rows = sum(1 for r in rows if 'class="t-name"' in r or "class='t-name'" in r)
+        
+        return jsonify({
+            'total_rows': len(rows),
+            'player_rows': player_rows,
+            'fRow_rows': fRow_rows,
+            'tname_rows': tname_rows,
+            'first_10_samples': samples
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
 
 
 
