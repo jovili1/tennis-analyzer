@@ -4,11 +4,22 @@
 
 console.log('🔥 analyse.js wird geladen...');
 
+// ===== API-URL (lokal vs. online) =====
+var API_URL = window.API_URL || ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? ''
+    : 'https://tennis-analyzer-api.onrender.com');
+window.API_URL = API_URL;
+
+var BACKEND_URL = window.BACKEND_URL || ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? '..'
+    : 'https://jovili1.github.io/tennis-analyzer');
+window.BACKEND_URL = BACKEND_URL;
+
 let state = {
     type: 'atp', players: [], cacheLoaded: false,
     selected: null, imageCache: {}, imageCacheKeys: [],
     matchDb: null,
-    selectedElo: null,   // 🔥 NEU: ELO des ausgewählten Spielers
+    selectedElo: null,
     filter: 'wins',
     tournamentWins: 'all',
     tournamentSurface: 'all',
@@ -64,7 +75,7 @@ async function loadImage(id) {
 // ===== ELO LADEN (EINZELNER SPIELER) =====
 async function loadPlayerElo(playerName, surface = 'Rolling_Gesamt') {
     try {
-        const response = await fetch(`/api/elo?name=${encodeURIComponent(playerName)}&surface=${surface}`);
+        const response = await fetch(`${API_URL}/api/elo?name=${encodeURIComponent(playerName)}&surface=${surface}`);
         if (!response.ok) return null;
         const data = await response.json();
         return data;
@@ -74,7 +85,6 @@ async function loadPlayerElo(playerName, surface = 'Rolling_Gesamt') {
     }
 }
 
-// 🔥 NEU: Alle ELOs für ausgewählten Spieler laden (Gesamt + 3 Surfaces)
 async function loadEloForSelected(playerName) {
     try {
         const [gesamt, hard, clay, grass] = await Promise.all([
@@ -112,13 +122,29 @@ async function loadMatchDb(type) {
 
     console.warn(`⚠️ Keine globale DB, lade direkt...`);
     try {
-        const filename = type === 'atp' ? 'atp_matches.db' : 'wta_matches.db';
-        const res = await fetch(`../backend/spieler/${filename}`);
-        if (!res.ok) throw new Error(`${filename} nicht gefunden`);
-        const buf = await res.arrayBuffer();
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        let dbBytes;
+
+        if (isLocal) {
+            const filename = type === 'atp' ? 'atp_matches.db' : 'wta_matches.db';
+            const res = await fetch(`${BACKEND_URL}/backend/spieler/${filename}`);
+            if (!res.ok) throw new Error(`${filename} nicht gefunden`);
+            dbBytes = new Uint8Array(await res.arrayBuffer());
+        } else {
+            const zipName = type === 'atp' ? 'atp_matches.zip' : 'wta_matches.zip';
+            const zipUrl = `${BACKEND_URL}/dbs/${zipName}`;
+            console.log(`📦 Lade ZIP: ${zipUrl}`);
+            const res = await fetch(zipUrl);
+            if (!res.ok) throw new Error(`${zipName} nicht gefunden`);
+            const zipBuf = await res.arrayBuffer();
+            const unzipped = fflate.unzipSync(new Uint8Array(zipBuf));
+            const filename = Object.keys(unzipped)[0];
+            dbBytes = unzipped[filename];
+        }
+
         const SQL = await initSqlJs({ locateFile: f => `https://sql.js.org/dist/${f}` });
 
-        const db = new SQL.Database(new Uint8Array(buf));
+        const db = new SQL.Database(dbBytes);
         db._type = type;
         db._rankingType = type;
 
@@ -1550,7 +1576,7 @@ window.selectTournament = function(name) {
 // ===== HAUPTFUNKTION =====
 window.loadAnalyse = async function() {
     state.selected = null;
-    state.selectedElo = null;   // 🔥 ELO zurücksetzen
+    state.selectedElo = null;
     state.tournamentWins = 'all';
     state.tournamentSurface = 'all';
     state.tournamentSemifinal = 'all';
@@ -1645,7 +1671,7 @@ window.loadAnalyseModule = window.loadAnalyse;
 async function switchType(type) {
     state.type = type;
     state.selected = null;
-    state.selectedElo = null;   // 🔥 ELO zurücksetzen
+    state.selectedElo = null;
     state.tournamentWins = 'all';
     state.tournamentSurface = 'all';
     state.tournamentSemifinal = 'all';
@@ -1714,7 +1740,6 @@ async function doSearch(term) {
     }, 150);
 }
 
-// 🔥 ELO-Anzeige rendern (A+B)
 function renderSelectedElo(eloData) {
     const container = document.getElementById('selectedElo');
     if (!container) return;
@@ -1745,7 +1770,7 @@ window.selectPlayer = async function(name) {
     const found = players.find(p => p.name === name);
     if (!found) return;
     state.selected = found.name;
-    state.selectedElo = null;   // 🔥 ELO zurücksetzen
+    state.selectedElo = null;
     state.tournamentWins = 'all';
     state.tournamentSurface = 'all';
     state.tournamentSemifinal = 'all';
@@ -1763,11 +1788,9 @@ window.selectPlayer = async function(name) {
     document.getElementById('selectedDisplay').style.display = 'block';
     document.getElementById('selectedName').textContent = found.name;
 
-    // 🔥 ELO laden und anzeigen
     const eloContainer = document.getElementById('selectedElo');
     if (eloContainer) eloContainer.innerHTML = `<span style="color:#4a5a77;font-size:13px;">⏳ Lade ELO...</span>`;
 
-    // ELO parallel zu Matches laden
     loadEloForSelected(found.name).then(eloData => {
         state.selectedElo = eloData;
         renderSelectedElo(eloData);
@@ -1783,7 +1806,7 @@ window.selectPlayer = async function(name) {
 // ===== CLEAR =====
 window.clearSelection = function() {
     state.selected = null;
-    state.selectedElo = null;   // 🔥 ELO zurücksetzen
+    state.selectedElo = null;
     state.tournamentWins = 'all';
     state.tournamentSurface = 'all';
     state.tournamentSemifinal = 'all';
