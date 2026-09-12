@@ -790,7 +790,7 @@ def get_tournaments():
 
 @app.route('/api/live-matches', methods=['GET'])
 def get_live_matches():
-    """Holt Matches von TennisExplorer Results"""
+    """Holt Matches von TennisExplorer Results (findet größte result-Tabelle)"""
 
     try:
         print("📡 Lade Matches von TennisExplorer Results...")
@@ -805,51 +805,72 @@ def get_live_matches():
             timeout=15
         )
 
-        if response.status_code != 200:
-            print(f"❌ Status: {response.status_code}")
-            return jsonify([])
-
         html = response.text
         print(f"📄 HTML Länge: {len(html)}")
 
-        # Finde den Start der ersten result-Tabelle
-        table_start = html.find('<table class="result"')
-        if table_start == -1:
-            print("⚠️ Keine result-Tabelle gefunden")
-            return jsonify([])
+        # ALLE result-Tabellen finden
+        all_tables = []
+        search_pos = 0
 
-        # Finde das zugehörige </table> (mit Tiefen-Zählung für verschachtelte Tabellen)
-        pos = table_start
-        depth = 0
-        table_end = -1
-
-        while pos < len(html):
-            next_open = html.find('<table', pos)
-            next_close = html.find('</table>', pos)
-
-            if next_close == -1:
+        while True:
+            table_start = html.find('<table class="result', search_pos)
+            if table_start == -1:
                 break
 
-            if next_open != -1 and next_open < next_close:
-                depth += 1
-                pos = next_open + 6
-            else:
-                depth -= 1
-                pos = next_close + 8
-                if depth <= 0:
-                    table_end = pos
+            # Finde das Ende mit Tiefen-Zählung
+            pos = table_start
+            depth = 0
+            table_end = -1
+
+            while pos < len(html):
+                next_open = html.find('<table', pos)
+                next_close = html.find('</table>', pos)
+
+                if next_close == -1:
                     break
 
-        if table_end == -1:
-            print("⚠️ Tabellen-Ende nicht gefunden")
+                if next_open != -1 and next_open < next_close:
+                    depth += 1
+                    pos = next_open + 6
+                else:
+                    depth -= 1
+                    pos = next_close + 8
+                    if depth <= 0:
+                        table_end = pos
+                        break
+
+            if table_end != -1:
+                table_html = html[table_start:table_end]
+                rows_count = table_html.count('<tr')
+                all_tables.append({
+                    'start': table_start,
+                    'end': table_end,
+                    'html': table_html,
+                    'length': len(table_html),
+                    'rows': rows_count
+                })
+
+            search_pos = table_start + 20
+
+        print(f"📊 {len(all_tables)} result-Tabellen gefunden")
+
+        # Log welche Größe sie haben
+        for i, t in enumerate(all_tables):
+            print(f"   Tabelle {i}: {t['length']} Zeichen, {t['rows']} Zeilen")
+
+        if not all_tables:
+            print("⚠️ Keine Tabellen gefunden")
             return jsonify([])
 
-        table_html = html[table_start:table_end]
-        print(f"📊 Tabelle Länge: {len(table_html)}")
+        # Nimm die GRÖSSTE Tabelle
+        biggest = max(all_tables, key=lambda t: t['length'])
+        print(f"✅ Größte Tabelle: {biggest['length']} Zeichen, {biggest['rows']} Zeilen")
 
-        # Alle Zeilen extrahieren
+        table_html = biggest['html']
+
+        # Zeilen extrahieren
         rows = re.findall(r'<tr[^>]*>(.*?)</tr>', table_html, re.DOTALL)
-        print(f"📋 {len(rows)} Zeilen gefunden")
+        print(f"📋 {len(rows)} Zeilen verarbeitet")
 
         matches = []
         current_tourney = 'Match'
@@ -858,11 +879,15 @@ def get_live_matches():
 
         for row in rows:
             # Turnier-Header
-            if 'class="head' in row or 'head flags' in row:
-                header_match = re.search(r'<a[^>]*>([^<]+)</a>', row)
+            if 'class="head' in row:
+                header_match = re.search(
+                    r'<td[^>]*class="t-name"[^>]*>.*?<a[^>]*>.*?([^<]+)</a>',
+                    row, re.DOTALL
+                )
                 if header_match:
                     name = header_match.group(1).strip()
-                    if name and len(name) > 2 and name not in ['S', '1', '2', '3', '4', '5']:
+                    name = re.sub(r'&nbsp;', '', name).strip()
+                    if name and len(name) > 2:
                         current_tourney = name
                 continue
 
@@ -883,7 +908,7 @@ def get_live_matches():
             if time_match:
                 current_time = time_match.group(1).strip()
 
-            # Sieger-Zeile erkennen
+            # Sieger-Zeile?
             is_winner = 'fRow' in row
 
             # Satz-Scores
@@ -891,6 +916,7 @@ def get_live_matches():
             scores = []
             for s in score_cells:
                 clean = re.sub(r'<[^>]+>', '', s).strip()
+                clean = re.sub(r'&nbsp;', '', clean).strip()
                 if clean:
                     scores.append(clean)
 
@@ -902,7 +928,6 @@ def get_live_matches():
                 }
             else:
                 if pending_winner:
-                    # Score kombinieren
                     combined = []
                     for i in range(min(len(pending_winner['scores']), len(scores))):
                         s1 = pending_winner['scores'][i]
