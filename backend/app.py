@@ -795,10 +795,6 @@ def get_live_matches():
     try:
         print("📡 Lade Matches von TennisExplorer Results...")
 
-        # Heutiges Datum für Filter
-        from datetime import datetime
-        today = datetime.now().strftime('%Y-%m-%d')
-
         response = requests.get(
             'https://www.tennisexplorer.com/results/?type=atp-single',
             headers={
@@ -817,7 +813,7 @@ def get_live_matches():
 
         # Tabelle mit class="result" finden
         table_match = re.search(
-            r'<table[^>]*class="result[^"]*"[^>]*>(.*?)</table>',
+            r'<table[^>]*class="result"[^>]*>(.*?)</table>',
             html,
             re.DOTALL
         )
@@ -828,86 +824,93 @@ def get_live_matches():
 
         table_html = table_match.group(1)
 
-        # Zeilen extrahieren
+        # Alle Zeilen extrahieren
         rows = re.findall(r'<tr[^>]*>(.*?)</tr>', table_html, re.DOTALL)
 
         matches = []
-        current_tourney = None
+        current_tourney = 'Match'
+        current_time = ''
+        current_winner = None
 
         for row in rows:
-            # Turnier-Header-Zeile?
-            tourney_header = re.search(
-                r'<td[^>]*class="[^"]*t-name[^"]*"[^>]*>.*?<a[^>]*>([^<]+)</a>',
-                row, re.DOTALL
-            )
-            if tourney_header and 'head' not in row.lower():
-                current_tourney = tourney_header.group(1).strip()
+            # Turnier-Header erkennen: <tr class="head flags">
+            if 'class="head flags"' in row or 'head flags' in row:
+                tourney_match = re.search(
+                    r'<td[^>]*class="t-name"[^>]*>.*?<a[^>]*>.*?</span>.*?</span>([^<]+)</a>',
+                    row, re.DOTALL
+                )
+                if not tourney_match:
+                    tourney_match = re.search(r'<a[^>]*>([^<]+)</a>', row)
+                if tourney_match:
+                    current_tourney = tourney_match.group(1).strip()
                 continue
 
-            # Spieler-Links finden
-            player_links = re.findall(
-                r'<a[^>]*href="[^"]*/player/[^"]*"[^>]*>([^<]+)</a>',
-                row
+            # Match-Zeile: enthält <a href="/player/
+            player_match = re.search(
+                r'<td[^>]*class="t-name"[^>]*>.*?<a[^>]*href="/player/[^"]*"[^>]*>([^<]+)</a>',
+                row, re.DOTALL
             )
-
-            if len(player_links) < 2:
+            if not player_match:
                 continue
 
-            player1 = player_links[0].strip()
-            player2 = player_links[1].strip()
-
-            if not player1 or not player2 or len(player1) < 2 or len(player2) < 2:
+            player_name = player_match.group(1).strip()
+            if not player_name or len(player_name) < 2:
                 continue
 
-            # Score extrahieren
-            score = '—'
-            score_match = re.search(
-                r'<td[^>]*class="[^"]*score[^"]*"[^>]*>(.*?)</td>',
-                row, re.DOTALL
-            )
-            if score_match:
-                score = re.sub(r'<[^>]+>', '', score_match.group(1)).strip()
+            # Zeit extrahieren (nur aus der ersten Zeile)
+            time_match = re.search(r'<td[^>]*class="[^"]*time[^"]*"[^>]*>([^<]+)</td>', row)
+            if time_match:
+                current_time = time_match.group(1).strip()
 
-            # Ergebnis (✅/❌ für Sieger)
-            result = '—'
-            result_match = re.search(
-                r'<td[^>]*class="[^"]*result[^"]*"[^>]*>(.*?)</td>',
-                row, re.DOTALL
-            )
-            if result_match:
-                result = re.sub(r'<[^>]+>', '', result_match.group(1)).strip()
+            # "fRow" markiert die Sieger-Zeile
+            is_winner = 'fRow' in row
 
-            # Turnier aus dem Link extrahieren
-            tourney = current_tourney or 'Match'
-            tourney_match = re.search(r'href="(/[^"]+/\d{4}/[^"]+/)"', row)
-            if tourney_match:
-                tourney = tourney_match.group(1).split('/')[1].replace('-', ' ').title()
+            # Ergebnis (Sätze gewonnen)
+            result_match = re.search(r'<td[^>]*class="result"[^>]*>(\d+)</td>', row)
+            sets_won = result_match.group(1) if result_match else '0'
 
-            # Round extrahieren
-            round_match = re.search(
-                r'<td[^>]*class="[^"]*round[^"]*"[^>]*>(.*?)</td>',
-                row, re.DOTALL
-            )
-            round_str = ''
-            if round_match:
-                round_str = re.sub(r'<[^>]+>', '', round_match.group(1)).strip()
+            # Scores (Satz-Ergebnisse)
+            scores = re.findall(r'<td[^>]*class="score"[^>]*>([^<]*)</td>', row)
+            scores = [s.strip() for s in scores if s.strip()]
 
-            # Datum extrahieren
-            date_match = re.search(r'/results/(\d{4}-\d{2}-\d{2})/', row)
-            date_str = date_match.group(1) if date_match else today
+            if is_winner:
+                # Das ist die Sieger-Zeile → speichere sie für die Kombination
+                current_winner = {
+                    'name': player_name,
+                    'sets': sets_won,
+                    'scores': scores,
+                    'time': current_time
+                }
+            else:
+                # Das ist die Verlierer-Zeile → kombiniere mit Sieger
+                if current_winner and current_winner['name']:
+                    # Score zusammensetzen: "7-6 7-5" etc.
+                    p1_scores = current_winner['scores']
+                    p2_scores = scores
 
-            matches.append({
-                'player1': player1,
-                'player2': player2,
-                'score': score,
-                'status': '✅ Beendet',
-                'raw_status': 'finished',
-                'time': date_str,
-                'tourney': tourney,
-                'surface': '—',
-                'round': round_str,
-                'tour': 'ATP'
-            })
+                    combined_score = []
+                    for i in range(min(len(p1_scores), len(p2_scores))):
+                        s1 = re.sub(r'<[^>]+>', '', p1_scores[i]) if i < len(p1_scores) else ''
+                        s2 = re.sub(r'<[^>]+>', '', p2_scores[i]) if i < len(p2_scores) else ''
+                        if s1 and s2:
+                            combined_score.append(f"{s1}-{s2}")
+
+                    score_str = ' '.join(combined_score) if combined_score else '—'
+
+                    matches.append({
+                        'player1': current_winner['name'],
+                        'player2': player_name,
+                        'score': score_str,
+                        'status': '✅ Beendet',
+                        'raw_status': 'finished',
+                        'time': current_winner['time'],
+                        'tourney': current_tourney,
+                        'surface': '—',
+                        'round': '',
+                        'tour': 'ATP'
+                    })
+
+                    current_winner = None
 
         # Limitiere auf 12 Matches
         result = matches[:12]
@@ -917,6 +920,8 @@ def get_live_matches():
 
     except Exception as e:
         print(f"❌ Fehler beim Laden der Matches: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify([])
 
 
