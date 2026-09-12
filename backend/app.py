@@ -943,20 +943,26 @@ def get_live_matches():
 
 @app.route('/api/debug-enetscores', methods=['GET'])
 def debug_enetscores():
-    """Findet die richtige enetscores API-Domain"""
+    """Testet weitere enetscores-Subdomains"""
     results = {}
     
-    # Mögliche Domains
     domains = [
         'https://es-dapi.enetscores.com',
         'https://es-api.enetscores.com',
-        'https://api.enetscores.com',
+        'https://es-api1.enetscores.com',
+        'https://es-api2.enetscores.com',
+        'https://es-lapi.enetscores.com',
+        'https://es-ws.enetscores.com',
+        'https://es-wff.enetscores.com',
+        'https://es-obs.enetscores.com',   # observer
+        'https://es-observer.enetscores.com',
+        'https://es-ajax.enetscores.com',
         'https://es-data.enetscores.com',
-        'https://data.enetscores.com',
-        'https://es-live.enetscores.com',
-        'https://live.enetscores.com',
-        'https://es.enetscores.com',
-        'https://ws.enetscores.com',
+        'https://es-d.enetscores.com',
+        'https://es-ld.enetscores.com',    # livescore data
+        'https://es-ldapi.enetscores.com',
+        'https://es-livescore.enetscores.com',
+        'https://www.enetscores.com',      # Fallback
     ]
     
     path = '/livescore/daily/'
@@ -971,16 +977,29 @@ def debug_enetscores():
                     'Accept': 'application/json, text/plain, */*',
                     'Referer': 'https://www.tennisexplorer.com/'
                 },
-                timeout=10
+                timeout=8
             )
             results[domain] = {
                 'status': response.status_code,
-                'content_type': response.headers.get('Content-Type', ''),
+                'content_type': response.headers.get('Content-Type', '')[:50],
                 'length': len(response.text),
                 'first_200': response.text[:200]
             }
         except Exception as e:
-            results[domain] = {'error': str(e)[:100]}
+            results[domain] = {'error': str(e)[:80]}
+    
+    # Zusätzlich: Hauptseite scrapen und nach API-Referenzen suchen
+    try:
+        main_resp = requests.get(
+            'https://www.enetscores.com/live-scores',
+            headers={'User-Agent': 'Mozilla/5.0'},
+            timeout=10
+        )
+        # Suche nach allen URLs im HTML
+        all_urls = re.findall(r'https?://[a-z0-9\-\.]+\.enetscores\.com[^\s\'"<>]*', main_resp.text)
+        results['_main_page_urls'] = list(set(all_urls))[:20]
+    except Exception as e:
+        results['_main_error'] = str(e)
     
     return jsonify(results)
 
