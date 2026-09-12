@@ -941,19 +941,20 @@ def get_live_matches():
         return jsonify([])
 
 
-@app.route('/api/debug-enetscores', methods=['GET'])
-def debug_enetscores():
-    """Zeigt HTML-Struktur der enetscores Tennis-Seite"""
+@app.route('/api/debug-results', methods=['GET'])
+def debug_results():
+    """Testet die TennisExplorer Results-Seite"""
     results = {}
     
+    # Variante 1: Ohne spezielle Header
     try:
         response = requests.get(
-            'https://www.enetscores.com/tennis',
+            'https://www.tennisexplorer.com/results/',
             headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8',
-                'Referer': 'https://www.enetscores.com/'
+                'Cookie': 'euconsent-v2=accepted'  # Fake-Cookie um Banner zu umgehen
             },
             timeout=15
         )
@@ -961,31 +962,42 @@ def debug_enetscores():
         html = response.text
         results['status'] = response.status_code
         results['length'] = len(html)
-        
-        # Suche nach Match-typischen Elementen
+        results['has_tables'] = '<table' in html
+        results['tables_count'] = html.count('<table')
         results['has_score_class'] = 'score' in html.lower()
-        results['has_match_class'] = 'match' in html.lower()
-        results['has_event_class'] = 'event' in html.lower()
-        results['has_livescore_class'] = 'livescore' in html.lower()
+        results['has_player_links'] = 'player' in html.lower()
         
-        # Finde Tabellen
-        tables = re.findall(r'<table[^>]*>', html)
-        results['tables_found'] = len(tables)
-        results['table_samples'] = tables[:5]
+        # Zeige die ersten relevanten Zeilen mit Tabellen
+        tables = re.findall(r'<table[^>]*class="[^"]*"[^>]*>', html)
+        results['table_classes'] = list(set(tables))[:10]
         
-        # Suche nach data-Attributen
-        data_attrs = re.findall(r'data-[a-z\-]+="[^"]*"', html)
-        results['data_attrs_sample'] = list(set(data_attrs))[:20]
-        
-        # Suche nach Live-Score-Elementen
-        score_patterns = re.findall(r'class="[^"]*(?:score|match|event)[^"]*"', html)
-        results['score_classes'] = list(set(score_patterns))[:20]
-        
-        # Zeige einen Ausschnitt
+        # Zeige erste 3000 Zeichen
         results['first_3000'] = html[:3000]
+        
+        # Suche nach Spielernamen
+        player_links = re.findall(r'<a[^>]*href="[^"]*player[^"]*"[^>]*>([^<]+)</a>', html)
+        results['player_count'] = len(player_links)
+        results['first_10_players'] = player_links[:10]
         
     except Exception as e:
         results['error'] = str(e)
+    
+    # Variante 2: Alternative URL mit "?type=atp-single"
+    try:
+        response2 = requests.get(
+            'https://www.tennisexplorer.com/results/?type=atp-single',
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept-Language': 'de-DE,de;q=0.9',
+            },
+            timeout=15
+        )
+        results['alt_status'] = response2.status_code
+        results['alt_length'] = len(response2.text)
+        results['alt_player_count'] = len(re.findall(r'<a[^>]*href="[^"]*player[^"]*"[^>]*>([^<]+)</a>', response2.text))
+        
+    except Exception as e:
+        results['alt_error'] = str(e)
     
     return jsonify(results)
 
