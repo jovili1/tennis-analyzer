@@ -943,63 +943,49 @@ def get_live_matches():
 
 @app.route('/api/debug-enetscores', methods=['GET'])
 def debug_enetscores():
-    """Testet weitere enetscores-Subdomains"""
+    """Zeigt HTML-Struktur der enetscores Tennis-Seite"""
     results = {}
     
-    domains = [
-        'https://es-dapi.enetscores.com',
-        'https://es-api.enetscores.com',
-        'https://es-api1.enetscores.com',
-        'https://es-api2.enetscores.com',
-        'https://es-lapi.enetscores.com',
-        'https://es-ws.enetscores.com',
-        'https://es-wff.enetscores.com',
-        'https://es-obs.enetscores.com',   # observer
-        'https://es-observer.enetscores.com',
-        'https://es-ajax.enetscores.com',
-        'https://es-data.enetscores.com',
-        'https://es-d.enetscores.com',
-        'https://es-ld.enetscores.com',    # livescore data
-        'https://es-ldapi.enetscores.com',
-        'https://es-livescore.enetscores.com',
-        'https://www.enetscores.com',      # Fallback
-    ]
-    
-    path = '/livescore/daily/'
-    
-    for domain in domains:
-        try:
-            url = domain + path
-            response = requests.get(
-                url,
-                headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept': 'application/json, text/plain, */*',
-                    'Referer': 'https://www.tennisexplorer.com/'
-                },
-                timeout=8
-            )
-            results[domain] = {
-                'status': response.status_code,
-                'content_type': response.headers.get('Content-Type', '')[:50],
-                'length': len(response.text),
-                'first_200': response.text[:200]
-            }
-        except Exception as e:
-            results[domain] = {'error': str(e)[:80]}
-    
-    # Zusätzlich: Hauptseite scrapen und nach API-Referenzen suchen
     try:
-        main_resp = requests.get(
-            'https://www.enetscores.com/live-scores',
-            headers={'User-Agent': 'Mozilla/5.0'},
-            timeout=10
+        response = requests.get(
+            'https://www.enetscores.com/tennis',
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8',
+                'Referer': 'https://www.enetscores.com/'
+            },
+            timeout=15
         )
-        # Suche nach allen URLs im HTML
-        all_urls = re.findall(r'https?://[a-z0-9\-\.]+\.enetscores\.com[^\s\'"<>]*', main_resp.text)
-        results['_main_page_urls'] = list(set(all_urls))[:20]
+        
+        html = response.text
+        results['status'] = response.status_code
+        results['length'] = len(html)
+        
+        # Suche nach Match-typischen Elementen
+        results['has_score_class'] = 'score' in html.lower()
+        results['has_match_class'] = 'match' in html.lower()
+        results['has_event_class'] = 'event' in html.lower()
+        results['has_livescore_class'] = 'livescore' in html.lower()
+        
+        # Finde Tabellen
+        tables = re.findall(r'<table[^>]*>', html)
+        results['tables_found'] = len(tables)
+        results['table_samples'] = tables[:5]
+        
+        # Suche nach data-Attributen
+        data_attrs = re.findall(r'data-[a-z\-]+="[^"]*"', html)
+        results['data_attrs_sample'] = list(set(data_attrs))[:20]
+        
+        # Suche nach Live-Score-Elementen
+        score_patterns = re.findall(r'class="[^"]*(?:score|match|event)[^"]*"', html)
+        results['score_classes'] = list(set(score_patterns))[:20]
+        
+        # Zeige einen Ausschnitt
+        results['first_3000'] = html[:3000]
+        
     except Exception as e:
-        results['_main_error'] = str(e)
+        results['error'] = str(e)
     
     return jsonify(results)
 
