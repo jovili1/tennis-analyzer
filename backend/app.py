@@ -943,50 +943,44 @@ def get_live_matches():
 
 @app.route('/api/debug-enetscores', methods=['GET'])
 def debug_enetscores():
-    """Sucht nach API-URLs im enetscores Widget-JS"""
+    """Findet die richtige enetscores API-Domain"""
     results = {}
     
-    # Vue JS laden (1,8 MB)
-    try:
-        vue_url = 'https://es-djs.enetscores.com/js/widget/livescore/tennis/v2.0.1/default/livescore.min.js?c=FW6137D1984DA35ACE_d41d8cd98f00b204e9800998ecf8427e'
-        response = requests.get(
-            vue_url,
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://www.tennisexplorer.com/'
-            },
-            timeout=15
-        )
-        
-        js = response.text
-        results['js_length'] = len(js)
-        
-        # Suche nach allen URLs
-        all_urls = re.findall(r'https?://[^\s\'"`<>\)]+', js)
-        results['all_urls'] = list(set(all_urls))[:50]
-        
-        # Suche nach API-Pfaden (relativ)
-        api_paths = re.findall(r'[\'"`](/(?:api|v\d|live|data|scores)[^\'"`]*)', js)
-        results['api_paths'] = list(set(api_paths))[:30]
-        
-        # Suche nach typischen API-Keywords
-        keywords = ['ajax', 'fetch', 'axios', 'xmlhttp', 'apiUrl', 'api_url', 'baseUrl', 'endpoint']
-        found_keywords = {}
-        for kw in keywords:
-            idx = js.lower().find(kw.lower())
-            if idx >= 0:
-                # Zeige 100 Zeichen um das Keyword
-                start = max(0, idx - 50)
-                end = min(len(js), idx + 150)
-                found_keywords[kw] = js[start:end]
-        results['keywords'] = found_keywords
-        
-        # Suche nach enetscores-Subdomains
-        subdomains = re.findall(r'https?://([a-z0-9\-]+)\.enetscores\.com', js)
-        results['subdomains'] = list(set(subdomains))
-        
-    except Exception as e:
-        results['error'] = str(e)
+    # Mögliche Domains
+    domains = [
+        'https://es-dapi.enetscores.com',
+        'https://es-api.enetscores.com',
+        'https://api.enetscores.com',
+        'https://es-data.enetscores.com',
+        'https://data.enetscores.com',
+        'https://es-live.enetscores.com',
+        'https://live.enetscores.com',
+        'https://es.enetscores.com',
+        'https://ws.enetscores.com',
+    ]
+    
+    path = '/livescore/daily/'
+    
+    for domain in domains:
+        try:
+            url = domain + path
+            response = requests.get(
+                url,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'application/json, text/plain, */*',
+                    'Referer': 'https://www.tennisexplorer.com/'
+                },
+                timeout=10
+            )
+            results[domain] = {
+                'status': response.status_code,
+                'content_type': response.headers.get('Content-Type', ''),
+                'length': len(response.text),
+                'first_200': response.text[:200]
+            }
+        except Exception as e:
+            results[domain] = {'error': str(e)[:100]}
     
     return jsonify(results)
 
