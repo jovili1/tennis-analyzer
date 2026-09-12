@@ -1,0 +1,29 @@
+# GROSSE DATENBANKEN (kommen in GitHub Releases)
+backend/spieler/atp_matches.db
+backend/spieler/wta_matches.db
+backend/spieler/atp_matches.zip
+backend/spieler/wta_matches.zip
+
+# PYTHON
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+env/
+.venv/
+*.egg-info/
+
+# SYSTEM
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# LOKAL
+start.bat
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
