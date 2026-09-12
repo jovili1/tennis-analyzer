@@ -790,7 +790,7 @@ def get_tournaments():
 
 @app.route('/api/live-matches', methods=['GET'])
 def get_live_matches():
-    """Holt Matches von TennisExplorer Results (findet größte result-Tabelle)"""
+    """Holt Matches von TennisExplorer Results (Sieger per 'first time' + höchste Sätze)"""
 
     try:
         print("📡 Lade Matches von TennisExplorer Results...")
@@ -806,79 +806,34 @@ def get_live_matches():
         )
 
         html = response.text
-        print(f"📄 HTML Länge: {len(html)}")
 
-        # ALLE result-Tabellen finden
+        # Größte result-Tabelle finden
         all_tables = []
         search_pos = 0
-
         while True:
-            table_start = html.find('<table class="result', search_pos)
-            if table_start == -1:
-                break
-
-            # Finde das Ende mit Tiefen-Zählung
-            pos = table_start
-            depth = 0
-            table_end = -1
-
-            while pos < len(html):
-                next_open = html.find('<table', pos)
-                next_close = html.find('</table>', pos)
-
-                if next_close == -1:
-                    break
-
-                if next_open != -1 and next_open < next_close:
-                    depth += 1
-                    pos = next_open + 6
-                else:
-                    depth -= 1
-                    pos = next_close + 8
-                    if depth <= 0:
-                        table_end = pos
-                        break
-
-            if table_end != -1:
-                table_html = html[table_start:table_end]
-                rows_count = table_html.count('<tr')
-                all_tables.append({
-                    'start': table_start,
-                    'end': table_end,
-                    'html': table_html,
-                    'length': len(table_html),
-                    'rows': rows_count
-                })
-
-            search_pos = table_start + 20
-
-        print(f"📊 {len(all_tables)} result-Tabellen gefunden")
-
-        # Log welche Größe sie haben
-        for i, t in enumerate(all_tables):
-            print(f"   Tabelle {i}: {t['length']} Zeichen, {t['rows']} Zeilen")
+            ts = html.find('<table class="result', search_pos)
+            if ts == -1: break
+            te = html.find('</table>', ts)
+            if te != -1:
+                all_tables.append(html[ts:te+8])
+            search_pos = ts + 20
 
         if not all_tables:
-            print("⚠️ Keine Tabellen gefunden")
             return jsonify([])
 
-        # Nimm die GRÖSSTE Tabelle
-        biggest = max(all_tables, key=lambda t: t['length'])
-        print(f"✅ Größte Tabelle: {biggest['length']} Zeichen, {biggest['rows']} Zeilen")
-
-        table_html = biggest['html']
-
-        # Zeilen extrahieren
-        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', table_html, re.DOTALL)
-        print(f"📋 {len(rows)} Zeilen verarbeitet")
+        biggest = max(all_tables, key=len)
+        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', biggest, re.DOTALL)
 
         matches = []
         current_tourney = 'Match'
-        current_time = ''
-        pending_winner = None
 
-        for row in rows:
-            # Turnier-Header
+        # Wir sammeln Spieler-Zeilen pro Match (2 aufeinanderfolgende)
+        # Ein Match startet, wenn eine Zeile "first time" enthält
+        i = 0
+        while i < len(rows) and len(matches) < 12:
+            row = rows[i]
+
+            # Turnier-Header?
             if 'class="head' in row:
                 header_match = re.search(
                     r'<td[^>]*class="t-name"[^>]*>.*?<a[^>]*>.*?([^<]+)</a>',
@@ -889,70 +844,102 @@ def get_live_matches():
                     name = re.sub(r'&nbsp;', '', name).strip()
                     if name and len(name) > 2:
                         current_tourney = name
+                i += 1
                 continue
 
-            # Spieler-Link finden
+            # Spieler-Zeile?
             player_match = re.search(
                 r'<td[^>]*class="t-name"[^>]*>.*?<a[^>]*href="/player/[^"]*"[^>]*>([^<]+)</a>',
                 row, re.DOTALL
             )
             if not player_match:
+                i += 1
                 continue
 
-            player_name = player_match.group(1).strip()
-            if not player_name:
+            # Prüfen ob das eine Sieger-Zeile ist (hat "first time")
+            is_first_row = 'class="first time"' in row or 'class="first' in row
+
+            # Wenn NICHT first row, aber wir haben noch keine pending → skip
+            if not is_first_row:
+                i += 1
                 continue
+
+            # Sieger-Zeile gefunden!
+            player1 = player_match.group(1).strip()
 
             # Zeit
-            time_match = re.search(r'<td[^>]*class="[^"]*time[^"]*"[^>]*>([^<]+)</td>', row)
-            if time_match:
-                current_time = time_match.group(1).strip()
+            time_match = re.search(r'<td[^>]*class="first time"[^>]*>([^<]+)</td>', row)
+            time_str = time_match.group(1).strip() if time_match else ''
 
-            # Sieger-Zeile?
-            is_winner = 'fRow' in row
+            # Sätze Sieger
+            result1_match = re.search(r'<td[^>]*class="result"[^>]*>(\d+)</td>', row)
+            sets1 = int(result1_match.group(1)) if result1_match else 0
 
-            # Satz-Scores
-            score_cells = re.findall(r'<td[^>]*class="score"[^>]*>(.*?)</td>', row, re.DOTALL)
-            scores = []
-            for s in score_cells:
+            # Satz-Scores Sieger
+            score_cells1 = re.findall(r'<td[^>]*class="score"[^>]*>(.*?)</td>', row, re.DOTALL)
+            scores1 = []
+            for s in score_cells1:
                 clean = re.sub(r'<[^>]+>', '', s).strip()
                 clean = re.sub(r'&nbsp;', '', clean).strip()
                 if clean:
-                    scores.append(clean)
+                    scores1.append(clean)
 
-            if is_winner:
-                pending_winner = {
-                    'name': player_name,
-                    'scores': scores,
-                    'time': current_time
-                }
-            else:
-                if pending_winner:
-                    combined = []
-                    for i in range(min(len(pending_winner['scores']), len(scores))):
-                        s1 = pending_winner['scores'][i]
-                        s2 = scores[i]
-                        combined.append(f"{s1}-{s2}")
+            # Nächste Zeile = Verlierer
+            if i + 1 >= len(rows):
+                break
 
-                    score_str = ' '.join(combined) if combined else '—'
+            row2 = rows[i + 1]
+            player2_match = re.search(
+                r'<td[^>]*class="t-name"[^>]*>.*?<a[^>]*href="/player/[^"]*"[^>]*>([^<]+)</a>',
+                row2, re.DOTALL
+            )
+            if not player2_match:
+                i += 1
+                continue
 
-                    matches.append({
-                        'player1': pending_winner['name'],
-                        'player2': player_name,
-                        'score': score_str,
-                        'status': '✅ Beendet',
-                        'raw_status': 'finished',
-                        'time': pending_winner['time'],
-                        'tourney': current_tourney,
-                        'surface': '—',
-                        'round': '',
-                        'tour': 'ATP'
-                    })
+            player2 = player2_match.group(1).strip()
 
-                    pending_winner = None
+            # Satz-Scores Verlierer
+            score_cells2 = re.findall(r'<td[^>]*class="score"[^>]*>(.*?)</td>', row2, re.DOTALL)
+            scores2 = []
+            for s in score_cells2:
+                clean = re.sub(r'<[^>]+>', '', s).strip()
+                clean = re.sub(r'&nbsp;', '', clean).strip()
+                if clean:
+                    scores2.append(clean)
 
-                    if len(matches) >= 12:
-                        break
+            # Sätze Verlierer
+            result2_match = re.search(r'<td[^>]*class="result"[^>]*>(\d+)</td>', row2)
+            sets2 = int(result2_match.group(1)) if result2_match else 0
+
+            # Sieger bestimmen: höhere Sätze
+            if sets2 > sets1:
+                # Verlierer ist tatsächlich Sieger → tauschen
+                player1, player2 = player2, player1
+                scores1, scores2 = scores2, scores1
+                sets1, sets2 = sets2, sets1
+
+            # Score kombinieren
+            combined = []
+            for j in range(min(len(scores1), len(scores2))):
+                combined.append(f"{scores1[j]}-{scores2[j]}")
+
+            score_str = ' '.join(combined) if combined else '—'
+
+            matches.append({
+                'player1': player1,
+                'player2': player2,
+                'score': score_str,
+                'status': '✅ Beendet',
+                'raw_status': 'finished',
+                'time': time_str,
+                'tourney': current_tourney,
+                'surface': '—',
+                'round': '',
+                'tour': 'ATP'
+            })
+
+            i += 2  # Skip die Verlierer-Zeile
 
         print(f"✅ {len(matches)} Matches fertig")
         return jsonify(matches)
@@ -962,77 +949,6 @@ def get_live_matches():
         import traceback
         traceback.print_exc()
         return jsonify([])
-
-@app.route('/api/debug-results', methods=['GET'])
-def debug_results():
-    """Zeigt die echte Zeilen-Struktur"""
-    try:
-        response = requests.get(
-            'https://www.tennisexplorer.com/results/?type=atp-single',
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'text/html,application/xhtml+xml',
-                'Accept-Language': 'de-DE,de;q=0.9'
-            },
-            timeout=15
-        )
-        
-        html = response.text
-        
-        # Finde größte result-Tabelle
-        all_tables = []
-        search_pos = 0
-        while True:
-            ts = html.find('<table class="result', search_pos)
-            if ts == -1: break
-            te = html.find('</table>', ts)
-            if te != -1:
-                all_tables.append(html[ts:te+8])
-            search_pos = ts + 20
-        
-        biggest = max(all_tables, key=len)
-        
-        # Extrahiere alle Zeilen
-        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', biggest, re.DOTALL)
-        
-        # Prüfe die ersten 10 Zeilen
-        samples = []
-        for i, row in enumerate(rows[:10]):
-            has_td = '<td' in row
-            has_player = '/player/' in row
-            has_tname = 't-name' in row
-            has_fRow = 'fRow' in row
-            
-            samples.append({
-                'index': i,
-                'length': len(row),
-                'has_td': has_td,
-                'has_player_link': has_player,
-                'has_tname_class': has_tname,
-                'has_fRow': has_fRow,
-                'first_300': row[:300]
-            })
-        
-        # Zähle wie viele Zeilen player-links haben
-        player_rows = sum(1 for r in rows if '/player/' in r)
-        fRow_rows = sum(1 for r in rows if 'fRow' in r)
-        tname_rows = sum(1 for r in rows if 'class="t-name"' in r or "class='t-name'" in r)
-        
-        return jsonify({
-            'total_rows': len(rows),
-            'player_rows': player_rows,
-            'fRow_rows': fRow_rows,
-            'tname_rows': tname_rows,
-            'first_10_samples': samples
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)})
-
-
-
-
-
-
 
 
 # ============================================================
