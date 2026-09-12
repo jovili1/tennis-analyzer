@@ -925,6 +925,41 @@ def get_live_matches():
         return jsonify([])
 
 
+@app.route('/api/debug-results', methods=['GET'])
+def debug_results():
+    """Zeigt was TennisExplorer WIRKLICH an Render liefert"""
+    try:
+        response = requests.get(
+            'https://www.tennisexplorer.com/results/?type=atp-single',
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml',
+                'Accept-Language': 'de-DE,de;q=0.9'
+            },
+            timeout=15
+        )
+        
+        html = response.text
+        
+        # Suche nach "result" Tabelle
+        result_table = re.search(r'<table[^>]*class="result"[^>]*>', html)
+        
+        # Zähle was gefunden wird
+        return jsonify({
+            'status': response.status_code,
+            'length': len(html),
+            'has_result_table': bool(result_table),
+            'result_table_tag': result_table.group(0) if result_table else None,
+            'has_player_links': len(re.findall(r'href="/player/', html)),
+            'has_cassis_challenger': 'Cassis challenger' in html,
+            'has_lajal': 'Lajal' in html,
+            'first_500_after_body': html[html.find('<body'):html.find('<body')+500] if '<body' in html else 'NO BODY',
+            'sample_player_link': re.findall(r'<a[^>]*href="/player/[^"]*"[^>]*>[^<]+</a>', html)[:3]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+
 
 
 
