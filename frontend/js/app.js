@@ -9,6 +9,20 @@ window.globalDbATP = null;
 window.globalDbWTA = null;
 window.currentRankingType = 'atp';
 
+// ===== ZIP-QUELLE (GitHub Releases) =====
+const DB_RELEASE_URL = 'https://github.com/jovili1/tennis-analyzer/releases/download/v1.0.0';
+
+// ===== ZIP-ENTPACKUNG (aus GitHub Releases) =====
+async function loadZippedDatabase(zipUrl) {
+    const response = await fetch(zipUrl);
+    if (!response.ok) throw new Error(`ZIP nicht gefunden: ${zipUrl}`);
+    const zipBuffer = await response.arrayBuffer();
+    const unzipped = fflate.unzipSync(new Uint8Array(zipBuffer));
+    const filename = Object.keys(unzipped)[0];
+    console.log(`📦 ZIP entpackt: ${filename}`);
+    return unzipped[filename];
+}
+
 // ===== DATENBANK SCHLIESSEN =====
 function closeDatabase(type) {
     if (type === 'atp' && window.globalDbATP) {
@@ -49,18 +63,33 @@ async function loadDatabase(type) {
     console.log(`📦 Lade ${type.toUpperCase()}-DB...`);
     try {
         const SQL = await initSqlJs({ locateFile: f => `https://sql.js.org/dist/${f}` });
-        const filename = type === 'atp' ? 'atp_matches.db' : 'wta_matches.db';
-        const res = await fetch(`../backend/spieler/${filename}`);
-        if (!res.ok) throw new Error(`${filename} nicht gefunden`);
-        const buf = await res.arrayBuffer();
-        const db = new SQL.Database(new Uint8Array(buf));
+
+        // 🔥 Lokal: direkt aus ../backend/spieler/
+        // 🔥 Online: ZIP aus GitHub Releases entpacken
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+        let dbBytes;
+
+        if (isLocal) {
+            const filename = type === 'atp' ? 'atp_matches.db' : 'wta_matches.db';
+            const res = await fetch(`../backend/spieler/${filename}`);
+            if (!res.ok) throw new Error(`${filename} nicht gefunden`);
+            dbBytes = new Uint8Array(await res.arrayBuffer());
+        } else {
+            const zipName = type === 'atp' ? 'atp_matches.zip' : 'wta_matches.zip';
+            const zipUrl = `${DB_RELEASE_URL}/${zipName}`;
+            console.log(`📦 Lade ZIP von GitHub Releases: ${zipName}`);
+            dbBytes = await loadZippedDatabase(zipUrl);
+        }
+
+        const db = new SQL.Database(dbBytes);
         db._type = type;
 
         if (type === 'atp') window.globalDbATP = db;
         else window.globalDbWTA = db;
 
         window.currentRankingType = type;
-        console.log(`✅ ${type.toUpperCase()}-DB geladen (${(buf.byteLength/1024/1024).toFixed(1)} MB)`);
+        console.log(`✅ ${type.toUpperCase()}-DB geladen (${(dbBytes.byteLength/1024/1024).toFixed(1)} MB)`);
         return db;
     } catch (error) {
         console.error(`❌ Fehler beim Laden der ${type.toUpperCase()}-DB:`, error);
@@ -169,7 +198,7 @@ function navigateTo(page, ranking) {
     }
 }
 
-// ===== DATENBANKEN BEIM START LADEN (Wrapper um loadDatabase) =====
+// ===== DATENBANKEN BEIM START LADEN =====
 async function initGlobalDatabases() {
     console.log('🔥 Lade globale Datenbanken...');
     try {
@@ -209,7 +238,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
 
-        // 🔥 Bewusst immer Dashboard beim Start (auch wenn andere Seite in localStorage steht)
+        // 🔥 Bewusst immer Dashboard beim Start
         const savedPage = 'dashboard';
         const savedRanking = localStorage.getItem('currentRanking') || 'atp';
 
