@@ -871,6 +871,9 @@ if __name__ == "__main__":
     ATP_PLAYERS = os.path.join(SPIELER_DIR, "atp_players.db")
     WTA_PLAYERS = os.path.join(SPIELER_DIR, "wta_players.db")
 
+    # 🔥 Render-kompatibel: Port aus Umgebungsvariable
+    port = int(os.environ.get("PORT", 5000))
+
     print("=" * 60)
     print("🎾 TENNIS API v3.3")
     print("=" * 60)
@@ -879,8 +882,8 @@ if __name__ == "__main__":
     print(f"📁 ATP Player-DB:   {'✅' if os.path.exists(ATP_PLAYERS) else '❌'}  {ATP_PLAYERS}")
     print(f"📁 WTA Player-DB:   {'✅' if os.path.exists(WTA_PLAYERS) else '❌'}  {WTA_PLAYERS}")
     print()
-    print("🔗 http://localhost:5000")
+    print(f"🔗 http://localhost:{port}")
     print("=" * 60)
     print()
 
-    app.run(debug=True, port=5000)
+    app.run(host="0.0.0.0", port=port, debug=False)
