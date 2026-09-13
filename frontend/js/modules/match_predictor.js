@@ -1783,42 +1783,17 @@ window.loadMatchPredictorModule = window.loadMatchPredictor;
 // =====================================================
 
 async function updateElos() {
-    const btn = document.getElementById('eloUpdateBtn');
     const status = document.getElementById('eloUpdateStatus');
-
-    if (!btn || !status) return;
-
-    btn.disabled = true;
-    btn.textContent = '⏳ Aktualisiere...';
-    status.textContent = '⏳ ELOs werden aktualisiert (kann 2-5 Min dauern)...';
-    status.style.color = '#f1c40f';
-
-    try {
-        const response = await fetch(`${API_URL}/api/update-elo`, { method: 'POST' });
-        const data = await response.json();
-
-        if (data.success) {
-            status.textContent = '✅ ' + data.message;
-            status.style.color = '#2ecc71';
-            btn.textContent = '✅ Aktualisiert!';
-            setTimeout(() => location.reload(), 2000);
-        } else {
-            status.textContent = '❌ ' + (data.message || 'Fehler beim Update');
-            status.style.color = '#e74c3c';
-            btn.textContent = '❌ Fehler';
-        }
-    } catch (error) {
-        status.textContent = '❌ Verbindungsfehler: ' + error.message;
-        status.style.color = '#e74c3c';
-        btn.textContent = '❌ Fehler';
+    if (status) {
+        status.textContent = '🔒 Nur für den Entwickler verfügbar';
+        status.style.color = '#f1c40f';
+        setTimeout(() => {
+            if (status.textContent === '🔒 Nur für den Entwickler verfügbar') {
+                loadLastUpdateDate();
+            }
+        }, 3000);
     }
-
-    btn.disabled = false;
-    setTimeout(() => {
-        if (btn.textContent === '❌ Fehler') {
-            btn.textContent = '🔄 ELOs aktualisieren';
-        }
-    }, 5000);
+    console.log('🔒 ELO-Update-Button geklickt - nur für Entwickler');
 }
 
 async function loadLastUpdateDate() {
