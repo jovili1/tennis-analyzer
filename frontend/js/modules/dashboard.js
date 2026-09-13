@@ -440,7 +440,7 @@ function renderMatches(matches) {
         return getNoMatchesMessage();
     }
 
-    const attribution = `<span style="font-size:9px;color:#2a3a4a;">Daten: <a href="https://sportscore.com" target="_blank" style="color:#2a3a4a;text-decoration:none;">SportScore</a></span>`;
+    const attribution = `<span style="font-size:9px;color:#2a3a4a;">Daten: <a href="https://www.tennisexplorer.com" target="_blank" style="color:#2a3a4a;text-decoration:none;">TennisExplorer</a></span>`;
 
     const matchItems = matches.map(m => {
         const isFinished = m.raw_status === 'finished';
@@ -465,19 +465,30 @@ function renderMatches(matches) {
         const playerColor2 = '#7a8aa3';
         const scoreColor = '#4a5a77';
 
+        // 🔥 Turnier-Anzeige
+        const tourneyDisplay = m.tourney && m.tourney !== 'Match' ? `
+            <div style="color:#f1c40f;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px;">
+                🏆 ${m.tourney}
+            </div>
+        ` : '';
+
+        // 🔥 Turnier + Info-Zeile
         return `
-            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;transition:0.2s;"
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 14px;transition:0.2s;"
                  onmouseover="this.style.background='rgba(255,255,255,0.06)'"
                  onmouseout="this.style.background='rgba(255,255,255,0.03)'">
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1;min-width:0;">
-                    <span style="color:${playerColor1};font-weight:400;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">${m.player1 || '—'}</span>
-                    <span style="color:#4a5a77;font-size:11px;flex-shrink:0;">vs</span>
-                    <span style="color:${playerColor2};font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">${m.player2 || '—'}</span>
-                    ${statusBadge}
-                    ${timeDisplay}
-                </div>
-                <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
-                    <span style="color:${scoreColor};font-weight:400;font-size:13px;">${m.score || '—'}</span>
+                ${tourneyDisplay}
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1;min-width:0;">
+                        <span style="color:${playerColor1};font-weight:400;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">${m.player1 || '—'}</span>
+                        <span style="color:#4a5a77;font-size:11px;flex-shrink:0;">vs</span>
+                        <span style="color:${playerColor2};font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">${m.player2 || '—'}</span>
+                        ${statusBadge}
+                        ${timeDisplay}
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+                        <span style="color:${scoreColor};font-weight:400;font-size:13px;">${m.score || '—'}</span>
+                    </div>
                 </div>
             </div>
         `;
