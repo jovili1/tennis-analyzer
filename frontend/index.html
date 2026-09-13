@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-    <!-- 🔒 LOGIN-OVERLAY (immer sichtbar bis eingeloggt) -->
+    <!-- 🔒 LOGIN-OVERLAY -->
     <div id="loginOverlay" style="
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
@@ -60,13 +60,17 @@
         </div>
     </div>
 
-    <!-- 🔒 APP-CONTAINER (anfangs versteckt) -->
+    <!-- 🔒 APP-CONTAINER (versteckt) -->
     <div class="main" id="appContainer" style="display: none;">
         <h1 id="pageTitle">🎾 ATP <span class="highlight">Weltrangliste</span></h1>
         <div class="content-container" id="pageContent">
             <div class="loading">⏳ Lade ...</div>
         </div>
     </div>
+
+    <!-- 🔒 CORE-SCRIPTS (fflate + sql.js) IMMER laden -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fflate/0.8.2/fflate.min.js"></script>
+    <script src="https://sql.js.org/dist/sql-wasm.js"></script>
 
     <!-- 🔒 LOGIN-LOGIC -->
     <script>
@@ -80,23 +84,26 @@
         const loginOverlay = document.getElementById('loginOverlay');
         const appContainer = document.getElementById('appContainer');
 
-        // 🔥 Session-Check: schon eingeloggt?
+        // Prüfen ob fflate da ist
+        console.log('🔍 fflate verfügbar:', typeof fflate !== 'undefined');
+        console.log('🔍 SQL verfügbar:', typeof initSqlJs !== 'undefined');
+
+        // 🔥 Session-Check
         if (sessionStorage.getItem('tennis_auth') === 'true') {
             window.__loggedIn = true;
             window.__user = sessionStorage.getItem('tennis_user');
             loginOverlay.style.display = 'none';
             appContainer.style.display = 'block';
-            // Scripts laden
-            window.addEventListener('DOMContentLoaded', loadAllScripts);
             if (document.readyState !== 'loading') {
-                loadAllScripts();
+                loadAppModules();
+            } else {
+                window.addEventListener('DOMContentLoaded', loadAppModules);
             }
             return;
         }
 
         window.__loggedIn = false;
 
-        // Login-Funktion
         window.doLogin = async function() {
             const user = document.getElementById('loginUser').value.trim().toLowerCase();
             const pw = document.getElementById('loginPass').value;
@@ -126,7 +133,7 @@
                 appContainer.style.display = 'block';
                 console.log('✅ Eingeloggt als:', user);
 
-                loadAllScripts();
+                loadAppModules();
             } else {
                 err.textContent = '❌ Falsches Passwort';
                 document.getElementById('loginPass').value = '';
@@ -134,7 +141,6 @@
             }
         };
 
-        // Enter-Taste + Button
         document.getElementById('loginBtn').addEventListener('click', window.doLogin);
         document.getElementById('loginPass').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') window.doLogin();
@@ -142,59 +148,64 @@
         document.getElementById('loginUser').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') document.getElementById('loginPass').focus();
         });
-
-        // Focus auf Nutzername
         setTimeout(() => document.getElementById('loginUser').focus(), 100);
-
-        // 🔥 Scripts laden
-        function loadAllScripts() {
-            if (window.__scriptsLoaded) return;
-            window.__scriptsLoaded = true;
-
-            const coreScripts = [
-                'https://cdnjs.cloudflare.com/ajax/libs/fflate/0.8.2/fflate.min.js',
-                'https://sql.js.org/dist/sql-wasm.js'
-            ];
-
-            const moduleScripts = [
-                'js/modules/sidebar.js',
-                'js/modules/ranking.js',
-                'js/modules/players.js',
-                'js/modules/analyse.js',
-                'js/modules/h2h.js',
-                'js/modules/dashboard.js',
-                'js/modules/match_predictor.js',
-                'js/app.js'
-            ];
-
-            const allScripts = [...coreScripts, ...moduleScripts];
-            let index = 0;
-
-            function loadNext() {
-                if (index >= allScripts.length) {
-                    setTimeout(function() {
-                        const event = new Event('DOMContentLoaded');
-                        document.dispatchEvent(event);
-                        console.log('🚀 App gestartet');
-                    }, 100);
-                    return;
-                }
-                const script = document.createElement('script');
-                script.src = allScripts[index];
-                script.onload = function() {
-                    index++;
-                    loadNext();
-                };
-                script.onerror = function() {
-                    console.error('❌ Konnte nicht laden:', allScripts[index]);
-                    index++;
-                    loadNext();
-                };
-                document.head.appendChild(script);
-            }
-            loadNext();
-        }
     })();
+
+    // 🔥 App-Module laden (NACH core scripts)
+    function loadAppModules() {
+        if (window.__modulesLoaded) return;
+        window.__modulesLoaded = true;
+
+        // Prüfen ob Core-Scripts da sind
+        if (typeof fflate === 'undefined') {
+            console.error('❌ fflate nicht geladen!');
+            alert('Fehler: fflate konnte nicht geladen werden. Bitte Seite neu laden.');
+            return;
+        }
+        if (typeof initSqlJs === 'undefined') {
+            console.error('❌ sql.js nicht geladen!');
+            alert('Fehler: sql.js konnte nicht geladen werden. Bitte Seite neu laden.');
+            return;
+        }
+
+        console.log('✅ Core-Scripts geladen (fflate + sql.js)');
+
+        const modules = [
+            'js/modules/sidebar.js',
+            'js/modules/ranking.js',
+            'js/modules/players.js',
+            'js/modules/analyse.js',
+            'js/modules/h2h.js',
+            'js/modules/dashboard.js',
+            'js/modules/match_predictor.js',
+            'js/app.js'
+        ];
+
+        let index = 0;
+        function loadNext() {
+            if (index >= modules.length) {
+                setTimeout(function() {
+                    const event = new Event('DOMContentLoaded');
+                    document.dispatchEvent(event);
+                    console.log('🚀 App gestartet');
+                }, 100);
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = modules[index];
+            script.onload = function() {
+                index++;
+                loadNext();
+            };
+            script.onerror = function() {
+                console.error('❌ Konnte nicht laden:', modules[index]);
+                index++;
+                loadNext();
+            };
+            document.head.appendChild(script);
+        }
+        loadNext();
+    }
     </script>
 </body>
 </html>
