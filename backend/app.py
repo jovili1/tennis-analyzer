@@ -791,13 +791,21 @@ def get_tournaments():
 
 @app.route('/api/live-matches', methods=['GET'])
 def get_live_matches():
-    """Holt Matches von TennisExplorer Results"""
+    """Holt Matches von TennisExplorer (ATP oder WTA)"""
 
     try:
-        print("📡 Lade Matches von TennisExplorer Results...")
+        # Tour-Parameter auslesen (Standard: ATP)
+        tour_param = request.args.get('tour', 'atp').lower()
+        if tour_param not in ['atp', 'wta']:
+            tour_param = 'atp'
+
+        tour_type = f'{tour_param}-single'
+        tour_label = tour_param.upper()
+
+        print(f"📡 Lade {tour_label}-Matches von TennisExplorer...")
 
         response = requests.get(
-            'https://www.tennisexplorer.com/results/?type=atp-single',
+            f'https://www.tennisexplorer.com/results/?type={tour_type}',
             headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'Accept': 'text/html,application/xhtml+xml',
@@ -805,6 +813,10 @@ def get_live_matches():
             },
             timeout=15
         )
+
+        if response.status_code != 200:
+            print(f"❌ TennisExplorer antwortet mit {response.status_code}")
+            return jsonify([])
 
         html = response.text
 
@@ -824,7 +836,7 @@ def get_live_matches():
 
         biggest = max(all_tables, key=len)
 
-        # 🔥 WICHTIG: attrs UND content separat extrahieren
+        # attrs + content separat
         tr_matches = re.findall(r'<tr([^>]*)>(.*?)</tr>', biggest, re.DOTALL)
         rows = []
         for attrs, content in tr_matches:
@@ -837,10 +849,10 @@ def get_live_matches():
         current_tourney = 'Match'
 
         i = 0
-        while i < len(rows) and len(matches) < 12:
+        while i < len(rows) and len(matches) < 10:
             row = rows[i]
 
-            # Turnier-Header? (Prüfe attrs!)
+            # Turnier-Header
             if 'head' in row['attrs']:
                 tourney_match = re.search(
                     r'<a[^>]*href="/([^/"]+)/\d{4}/[^"]*"[^>]*>(.*?)</a>',
@@ -860,7 +872,7 @@ def get_live_matches():
                 i += 1
                 continue
 
-            # Spieler-Zeile? (Prüfe content!)
+            # Spieler-Zeile
             player_match = re.search(
                 r'<td[^>]*class="t-name"[^>]*>.*?<a[^>]*href="/player/[^"]*"[^>]*>([^<]+)</a>',
                 row['content'], re.DOTALL
@@ -869,14 +881,12 @@ def get_live_matches():
                 i += 1
                 continue
 
-            # Prüfen ob das eine Sieger-Zeile ist (hat "first time" im content)
+            # Sieger-Zeile (first time)
             is_first_row = 'first time' in row['content']
-
             if not is_first_row:
                 i += 1
                 continue
 
-            # Sieger-Zeile gefunden!
             player1 = player_match.group(1).strip()
 
             # Zeit
@@ -896,10 +906,10 @@ def get_live_matches():
                 if clean:
                     scores1.append(clean)
 
-            # Nächste Zeile = Verlierer
             if i + 1 >= len(rows):
                 break
 
+            # Verlierer-Zeile
             row2 = rows[i + 1]
             player2_match = re.search(
                 r'<td[^>]*class="t-name"[^>]*>.*?<a[^>]*href="/player/[^"]*"[^>]*>([^<]+)</a>',
@@ -924,7 +934,7 @@ def get_live_matches():
             result2_match = re.search(r'<td[^>]*class="result"[^>]*>(\d+)</td>', row2['content'])
             sets2 = int(result2_match.group(1)) if result2_match else 0
 
-            # Sieger bestimmen: höhere Sätze
+            # Sieger bestimmen
             if sets2 > sets1:
                 player1, player2 = player2, player1
                 scores1, scores2 = scores2, scores1
@@ -937,7 +947,7 @@ def get_live_matches():
 
             score_str = ' '.join(combined) if combined else '—'
 
-            # Datum + Uhrzeit kombinieren
+            # Datum + Uhrzeit
             from datetime import datetime
             today = datetime.now().strftime('%Y-%m-%d')
             time_full = f"{today}T{time_str}:00" if time_str else today
@@ -952,12 +962,12 @@ def get_live_matches():
                 'tourney': current_tourney,
                 'surface': '—',
                 'round': '',
-                'tour': 'ATP'
+                'tour': tour_label
             })
 
             i += 2
 
-        print(f"✅ {len(matches)} Matches fertig")
+        print(f"✅ {len(matches)} Matches geladen ({tour_label})")
         return jsonify(matches)
 
     except Exception as e:

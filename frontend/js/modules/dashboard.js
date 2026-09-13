@@ -404,18 +404,35 @@ function getTopPlayersUnavailable() {
 // ===== MATCHES VON TENNISEXPLORER (ÜBER BACKEND-PROXY) =====
 // ============================================================
 
+// 🔥 Global: Aktueller Tour-Filter (ATP oder WTA)
+let currentTourFilter = 'atp';
+
 async function loadLatestMatches() {
     const container = document.getElementById('latestMatches');
     if (!container) return;
 
-    container.innerHTML = `
+    // Button-Leiste ATP/WTA
+    const buttonBar = `
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
+            <button onclick="setTourFilter('atp')"
+                    style="flex:1;padding:6px 12px;border-radius:8px;border:2px solid ${currentTourFilter === 'atp' ? 'rgba(52,152,219,0.5)' : 'rgba(255,255,255,0.08)'};background:${currentTourFilter === 'atp' ? 'rgba(52,152,219,0.15)' : 'transparent'};color:${currentTourFilter === 'atp' ? '#3498db' : '#7a8aa3'};font-weight:600;font-size:12px;cursor:pointer;transition:0.2s;font-family:'Inter',sans-serif;">
+                🎾 ATP
+            </button>
+            <button onclick="setTourFilter('wta')"
+                    style="flex:1;padding:6px 12px;border-radius:8px;border:2px solid ${currentTourFilter === 'wta' ? 'rgba(233,30,99,0.5)' : 'rgba(255,255,255,0.08)'};background:${currentTourFilter === 'wta' ? 'rgba(233,30,99,0.15)' : 'transparent'};color:${currentTourFilter === 'wta' ? '#e91e63' : '#7a8aa3'};font-weight:600;font-size:12px;cursor:pointer;transition:0.2s;font-family:'Inter',sans-serif;">
+                👑 WTA
+            </button>
+        </div>
+    `;
+
+    container.innerHTML = buttonBar + `
         <div style="color:#4a5a77;text-align:center;padding:15px 0;font-size:13px;">
             ⏳ Lade Matches...
         </div>
     `;
 
     try {
-        const response = await fetch(`${API_URL}/api/live-matches`);
+        const response = await fetch(`${API_URL}/api/live-matches?tour=${currentTourFilter}`);
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -429,16 +446,23 @@ async function loadLatestMatches() {
         }
 
         if (matches && matches.length > 0) {
-            container.innerHTML = renderMatches(matches);
-            console.log(`✅ ${matches.length} Matches geladen (limitiert auf 10)`);
+            container.innerHTML = buttonBar + renderMatches(matches);
+            console.log(`✅ ${matches.length} ${currentTourFilter.toUpperCase()}-Matches geladen`);
         } else {
-            container.innerHTML = getNoMatchesMessage();
+            container.innerHTML = buttonBar + getNoMatchesMessage();
         }
     } catch (error) {
         console.error('❌ Fehler beim Laden der Matches:', error);
-        container.innerHTML = getNoMatchesMessage();
+        container.innerHTML = buttonBar + getNoMatchesMessage();
     }
 }
+
+// 🔥 Button-Klick-Handler
+window.setTourFilter = function(tour) {
+    if (tour === currentTourFilter) return;
+    currentTourFilter = tour;
+    loadLatestMatches();
+};
 
 function renderMatches(matches) {
     if (!matches || matches.length === 0) {
@@ -477,7 +501,11 @@ function renderMatches(matches) {
             </div>
         ` : '';
 
-        // 🔥 Turnier + Info-Zeile
+        // 🔥 Tour-Badge (ATP/WTA)
+        const tourBadge = m.tour ? `
+            <span style="color:${m.tour === 'WTA' ? '#e91e63' : '#3498db'};font-size:9px;font-weight:700;background:${m.tour === 'WTA' ? 'rgba(233,30,99,0.1)' : 'rgba(52,152,219,0.1)'};padding:1px 6px;border-radius:4px;margin-left:4px;">${m.tour}</span>
+        ` : '';
+
         return `
             <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 14px;transition:0.2s;"
                  onmouseover="this.style.background='rgba(255,255,255,0.06)'"
