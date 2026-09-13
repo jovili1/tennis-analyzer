@@ -965,6 +965,56 @@ def get_live_matches():
         return jsonify([])
 
 
+@app.route('/api/debug-headers', methods=['GET'])
+def debug_headers():
+    """Zeigt Header-Zeilen der Tabelle"""
+    try:
+        response = requests.get(
+            'https://www.tennisexplorer.com/results/?type=atp-single',
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html'
+            },
+            timeout=15
+        )
+        html = response.text
+        
+        # Größte Tabelle finden
+        all_tables = []
+        search_pos = 0
+        while True:
+            ts = html.find('<table class="result', search_pos)
+            if ts == -1: break
+            te = html.find('</table>', ts)
+            if te != -1:
+                all_tables.append(html[ts:te+8])
+            search_pos = ts + 20
+        
+        biggest = max(all_tables, key=len)
+        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', biggest, re.DOTALL)
+        
+        # Alle Zeilen mit 'head' finden
+        headers = []
+        for row in rows:
+            if 'head' in row[:200]:  # Suche im Anfang der Zeile
+                headers.append({
+                    'has_head_string': 'class="head' in row,
+                    'first_500': row[:500]
+                })
+        
+        # Zusätzlich: Alle einzigartigen class-Attribute der <tr>-Tags
+        tr_classes = re.findall(r'<tr[^>]*class="([^"]*)"', biggest)
+        
+        return jsonify({
+            'total_rows': len(rows),
+            'header_rows': len(headers),
+            'tr_classes_unique': list(set(tr_classes)),
+            'header_samples': headers[:5]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+
 # ============================================================
 # START
 # ============================================================
