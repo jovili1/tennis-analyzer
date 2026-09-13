@@ -7,8 +7,68 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎾</text></svg>" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+    <!-- 🔒 LOGIN-OVERLAY (immer sichtbar bis eingeloggt) -->
+    <div id="loginOverlay" style="
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: radial-gradient(circle at center, #0f1724 0%, #05080f 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 99999;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    ">
+        <div style="
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 20px;
+            padding: 40px 36px;
+            width: 360px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        ">
+            <div style="text-align: center; margin-bottom: 28px;">
+                <div style="font-size: 52px; margin-bottom: 12px;">🎾</div>
+                <h1 style="color: #e0e6f0; font-size: 22px; font-weight: 700; margin: 0 0 6px 0;">Tennis Analyzer</h1>
+                <p style="color: #7a8aa3; font-size: 13px; margin: 0;">Privater Zugang</p>
+            </div>
 
-    <!-- 🔒 LOGIN-CHECK (muss VOR allen anderen Scripts laufen) -->
+            <div style="margin-bottom: 16px;">
+                <label style="color: #7a8aa3; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">Benutzername</label>
+                <input type="text" id="loginUser" placeholder="z.B. admin" autocomplete="username"
+                    style="width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: #141b2b; color: #e0e6f0; font-size: 14px; outline: none; box-sizing: border-box;"
+                    onfocus="this.style.borderColor='rgba(46,204,113,0.5)'"
+                    onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+            </div>
+
+            <div style="margin-bottom: 24px;">
+                <label style="color: #7a8aa3; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">Passwort</label>
+                <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"
+                    style="width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: #141b2b; color: #e0e6f0; font-size: 14px; outline: none; box-sizing: border-box;"
+                    onfocus="this.style.borderColor='rgba(46,204,113,0.5)'"
+                    onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+            </div>
+
+            <button id="loginBtn"
+                style="width: 100%; padding: 13px; border-radius: 10px; border: none; background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(46,204,113,0.3);">
+                Anmelden
+            </button>
+
+            <div id="loginError" style="color: #e74c3c; font-size: 12px; margin-top: 14px; min-height: 16px; text-align: center;"></div>
+        </div>
+    </div>
+
+    <!-- 🔒 APP-CONTAINER (anfangs versteckt) -->
+    <div class="main" id="appContainer" style="display: none;">
+        <h1 id="pageTitle">🎾 ATP <span class="highlight">Weltrangliste</span></h1>
+        <div class="content-container" id="pageContent">
+            <div class="loading">⏳ Lade ...</div>
+        </div>
+    </div>
+
+    <!-- 🔒 LOGIN-LOGIC -->
     <script>
     (function() {
         // 🔥 HIER DEINE NUTZER MIT HASHES EINTRAGEN
@@ -17,78 +77,26 @@
             // ... weitere Nutzer
         };
 
-        // Session-Check
+        const loginOverlay = document.getElementById('loginOverlay');
+        const appContainer = document.getElementById('appContainer');
+
+        // 🔥 Session-Check: schon eingeloggt?
         if (sessionStorage.getItem('tennis_auth') === 'true') {
             window.__loggedIn = true;
             window.__user = sessionStorage.getItem('tennis_user');
+            loginOverlay.style.display = 'none';
+            appContainer.style.display = 'block';
+            // Scripts laden
+            window.addEventListener('DOMContentLoaded', loadAllScripts);
+            if (document.readyState !== 'loading') {
+                loadAllScripts();
+            }
             return;
         }
 
         window.__loggedIn = false;
 
-        document.addEventListener('DOMContentLoaded', function() {
-            const overlay = document.createElement('div');
-            overlay.id = 'loginOverlay';
-            overlay.style.cssText = `
-                position: fixed;
-                top: 0; left: 0; right: 0; bottom: 0;
-                background: radial-gradient(circle at center, #0f1724 0%, #05080f 100%);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 99999;
-                font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            `;
-
-            overlay.innerHTML = `
-                <div style="
-                    background: rgba(255,255,255,0.03);
-                    border: 1px solid rgba(255,255,255,0.08);
-                    border-radius: 20px;
-                    padding: 40px 36px;
-                    width: 360px;
-                    backdrop-filter: blur(20px);
-                    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-                ">
-                    <div style="text-align: center; margin-bottom: 28px;">
-                        <div style="font-size: 52px; margin-bottom: 12px;">🎾</div>
-                        <h1 style="color: #e0e6f0; font-size: 22px; font-weight: 700; margin: 0 0 6px 0;">Tennis Analyzer</h1>
-                        <p style="color: #7a8aa3; font-size: 13px; margin: 0;">Privater Zugang</p>
-                    </div>
-
-                    <div style="margin-bottom: 16px;">
-                        <label style="color: #7a8aa3; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">Benutzername</label>
-                        <input type="text" id="loginUser" placeholder="z.B. admin" autocomplete="username"
-                            style="width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: #141b2b; color: #e0e6f0; font-size: 14px; outline: none; box-sizing: border-box;"
-                            onfocus="this.style.borderColor='rgba(46,204,113,0.5)'"
-                            onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
-                    </div>
-
-                    <div style="margin-bottom: 24px;">
-                        <label style="color: #7a8aa3; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">Passwort</label>
-                        <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"
-                            style="width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: #141b2b; color: #e0e6f0; font-size: 14px; outline: none; box-sizing: border-box;"
-                            onfocus="this.style.borderColor='rgba(46,204,113,0.5)'"
-                            onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
-                    </div>
-
-                    <button id="loginBtn"
-                        style="width: 100%; padding: 13px; border-radius: 10px; border: none; background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(46,204,113,0.3);">
-                        Anmelden
-                    </button>
-
-                    <div id="loginError" style="color: #e74c3c; font-size: 12px; margin-top: 14px; min-height: 16px; text-align: center;"></div>
-                </div>
-            `;
-
-            document.body.appendChild(overlay);
-            setTimeout(() => document.getElementById('loginUser').focus(), 100);
-            overlay.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') doLogin();
-            });
-            document.getElementById('loginBtn').addEventListener('click', doLogin);
-        });
-
+        // Login-Funktion
         window.doLogin = async function() {
             const user = document.getElementById('loginUser').value.trim().toLowerCase();
             const pw = document.getElementById('loginPass').value;
@@ -114,15 +122,11 @@
                 window.__loggedIn = true;
                 window.__user = user;
 
-                document.getElementById('loginOverlay').style.display = 'none';
+                loginOverlay.style.display = 'none';
+                appContainer.style.display = 'block';
                 console.log('✅ Eingeloggt als:', user);
 
-                // 🔥 Scripts NACHEINANDER laden (mit korrekter Reihenfolge)
-                loadScript('https://cdnjs.cloudflare.com/ajax/libs/fflate/0.8.2/fflate.min.js', function() {
-                    loadScript('https://sql.js.org/dist/sql-wasm.js', function() {
-                        loadAppModules();
-                    });
-                });
+                loadAllScripts();
             } else {
                 err.textContent = '❌ Falsches Passwort';
                 document.getElementById('loginPass').value = '';
@@ -130,17 +134,29 @@
             }
         };
 
-        // 🔥 Helper: Script sequenziell laden
-        function loadScript(src, callback) {
-            const script = document.createElement('script');
-            script.src = src;
-            script.onload = callback;
-            document.head.appendChild(script);
-        }
+        // Enter-Taste + Button
+        document.getElementById('loginBtn').addEventListener('click', window.doLogin);
+        document.getElementById('loginPass').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') window.doLogin();
+        });
+        document.getElementById('loginUser').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') document.getElementById('loginPass').focus();
+        });
 
-        // 🔥 App-Module NACHEINANDER laden
-        function loadAppModules() {
-            const modules = [
+        // Focus auf Nutzername
+        setTimeout(() => document.getElementById('loginUser').focus(), 100);
+
+        // 🔥 Scripts laden
+        function loadAllScripts() {
+            if (window.__scriptsLoaded) return;
+            window.__scriptsLoaded = true;
+
+            const coreScripts = [
+                'https://cdnjs.cloudflare.com/ajax/libs/fflate/0.8.2/fflate.min.js',
+                'https://sql.js.org/dist/sql-wasm.js'
+            ];
+
+            const moduleScripts = [
                 'js/modules/sidebar.js',
                 'js/modules/ranking.js',
                 'js/modules/players.js',
@@ -151,9 +167,11 @@
                 'js/app.js'
             ];
 
+            const allScripts = [...coreScripts, ...moduleScripts];
             let index = 0;
+
             function loadNext() {
-                if (index >= modules.length) {
+                if (index >= allScripts.length) {
                     setTimeout(function() {
                         const event = new Event('DOMContentLoaded');
                         document.dispatchEvent(event);
@@ -162,8 +180,13 @@
                     return;
                 }
                 const script = document.createElement('script');
-                script.src = modules[index];
+                script.src = allScripts[index];
                 script.onload = function() {
+                    index++;
+                    loadNext();
+                };
+                script.onerror = function() {
+                    console.error('❌ Konnte nicht laden:', allScripts[index]);
                     index++;
                     loadNext();
                 };
@@ -171,26 +194,7 @@
             }
             loadNext();
         }
-
-        // 🔥 Wenn schon eingeloggt (Session), direkt Scripts laden
-        if (window.__loggedIn) {
-            document.addEventListener('DOMContentLoaded', function() {
-                loadScript('https://cdnjs.cloudflare.com/ajax/libs/fflate/0.8.2/fflate.min.js', function() {
-                    loadScript('https://sql.js.org/dist/sql-wasm.js', function() {
-                        loadAppModules();
-                    });
-                });
-            });
-        }
     })();
     </script>
-</head>
-<body>
-    <div class="main">
-        <h1 id="pageTitle">🎾 ATP <span class="highlight">Weltrangliste</span></h1>
-        <div class="content-container" id="pageContent">
-            <div class="loading">🔒 Bitte anmelden...</div>
-        </div>
-    </div>
 </body>
 </html>
