@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from datetime import datetime
 import sqlite3
 import os
 import json
@@ -926,13 +927,18 @@ def get_live_matches():
 
             score_str = ' '.join(combined) if combined else '—'
 
+            # 🔥 Datum + Uhrzeit kombinieren
+            from datetime import datetime
+            today = datetime.now().strftime('%Y-%m-%d')
+            time_full = f"{today}T{time_str}:00" if time_str else today
+
             matches.append({
                 'player1': player1,
                 'player2': player2,
                 'score': score_str,
                 'status': '✅ Beendet',
                 'raw_status': 'finished',
-                'time': time_str,
+                'time': time_full,
                 'tourney': current_tourney,
                 'surface': '—',
                 'round': '',
