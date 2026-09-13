@@ -401,7 +401,7 @@ function getTopPlayersUnavailable() {
 }
 
 // ============================================================
-// ===== MATCHES VON SPORTSCORE API (ÜBER BACKEND-PROXY) =====
+// ===== MATCHES VON TENNISEXPLORER (ÜBER BACKEND-PROXY) =====
 // ============================================================
 
 async function loadLatestMatches() {
@@ -421,11 +421,16 @@ async function loadLatestMatches() {
             throw new Error(`HTTP ${response.status}`);
         }
 
-        const matches = await response.json();
+        let matches = await response.json();
+
+        // 🔥 Nur die ersten 10 anzeigen
+        if (matches && matches.length > 10) {
+            matches = matches.slice(0, 10);
+        }
 
         if (matches && matches.length > 0) {
             container.innerHTML = renderMatches(matches);
-            console.log(`✅ ${matches.length} Matches geladen`);
+            console.log(`✅ ${matches.length} Matches geladen (limitiert auf 10)`);
         } else {
             container.innerHTML = getNoMatchesMessage();
         }
