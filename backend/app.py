@@ -836,18 +836,18 @@ def get_live_matches():
 
             # Turnier-Header?
             if 'class="head' in row:
-                # Suche den Turnier-Link (href="/xxx/yyyy/zzz/")
+                # Suche den Turnier-Link 
                 tourney_match = re.search(
-                    r'<a[^>]*href="/([^/]+)/\d{4}/[^"]*"[^>]*>(.*?)</a>',
+                    r'<a[^>]*href="/([^/"]+)/\d{4}/[^"]*"[^>]*>(.*?)</a>',
                     row, re.DOTALL
                 )
                 if tourney_match:
-                    # Turniername aus dem href ableiten (falls Link-Text leer)
-                    url_part = tourney_match.group(1)  # z.B. "cassis-challenger"
-                    link_text = re.sub(r'<[^>]+>', '', tourney_match.group(2)).strip()
+                    url_part = tourney_match.group(1)
+                    link_html = tourney_match.group(2)
+                    # Entferne HTML-Tags aus dem Link-Text
+                    link_text = re.sub(r'<[^>]+>', '', link_html).strip()
                     link_text = re.sub(r'&nbsp;', '', link_text).strip()
-                    
-                    # Bevorzuge Link-Text, sonst aus URL
+
                     if link_text and len(link_text) > 2:
                         current_tourney = link_text
                     else:
