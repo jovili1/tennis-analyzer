@@ -1,4 +1,4 @@
-# GROSSE DATENBANKEN (kommen in GitHub Releases)
+﻿# GROSSE DATENBANKEN (kommen in GitHub Releases)
 backend/spieler/atp_matches.db
 backend/spieler/wta_matches.db
 backend/spieler/atp_matches.zip
@@ -27,3 +27,5 @@ start.bat
 .vscode/
 .idea/
 *.swp
+
+'admin':   'b367e9e143966ae9edb5ff9e579a30c74c97e7925ae23bf3c1b6fd201b159300',

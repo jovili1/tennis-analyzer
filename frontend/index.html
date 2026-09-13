@@ -8,24 +8,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="css/style.css" />
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/fflate/0.8.2/fflate.min.js"></script>
-    <script src="https://sql.js.org/dist/sql-wasm.js"></script>
-
-    <!-- 🔒 LOGIN-CHECK -->
+    <!-- 🔒 LOGIN-CHECK (muss VOR allen anderen Scripts laufen) -->
     <script>
     (function() {
         // 🔥 HIER DEINE NUTZER MIT HASHES EINTRAGEN
         const USERS = {
             'admin':   'b367e9e143966ae9edb5ff9e579a30c74c97e7925ae23bf3c1b6fd201b159300',
-            'lisa':  'HASH_VON_LISA_HIER',
-            'tom':   'HASH_VON_TOM_HIER',
-            'felix': 'HASH_VON_FELIX_HIER',
-            'anna':  'HASH_VON_ANNA_HIER',
-            'ben':   'HASH_VON_BEN_HIER',
-            'julia': 'HASH_VON_JULIA_HIER',
-            'paul':  'HASH_VON_PAUL_HIER',
-            'sarah': 'HASH_VON_SARAH_HIER',
-            'tim':   'HASH_VON_TIM_HIER'
+            // ... weitere Nutzer
         };
 
         // Session-Check
@@ -69,89 +58,34 @@
 
                     <div style="margin-bottom: 16px;">
                         <label style="color: #7a8aa3; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">Benutzername</label>
-                        <input 
-                            type="text" 
-                            id="loginUser" 
-                            placeholder="z.B. max"
-                            autocomplete="username"
-                            style="
-                                width: 100%;
-                                padding: 12px 14px;
-                                border-radius: 10px;
-                                border: 1px solid rgba(255,255,255,0.1);
-                                background: #141b2b;
-                                color: #e0e6f0;
-                                font-size: 14px;
-                                outline: none;
-                                box-sizing: border-box;
-                            "
+                        <input type="text" id="loginUser" placeholder="z.B. admin" autocomplete="username"
+                            style="width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: #141b2b; color: #e0e6f0; font-size: 14px; outline: none; box-sizing: border-box;"
                             onfocus="this.style.borderColor='rgba(46,204,113,0.5)'"
-                            onblur="this.style.borderColor='rgba(255,255,255,0.1)'"
-                        >
+                            onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
                     </div>
 
                     <div style="margin-bottom: 24px;">
                         <label style="color: #7a8aa3; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">Passwort</label>
-                        <input 
-                            type="password" 
-                            id="loginPass" 
-                            placeholder="••••••••"
-                            autocomplete="current-password"
-                            style="
-                                width: 100%;
-                                padding: 12px 14px;
-                                border-radius: 10px;
-                                border: 1px solid rgba(255,255,255,0.1);
-                                background: #141b2b;
-                                color: #e0e6f0;
-                                font-size: 14px;
-                                outline: none;
-                                box-sizing: border-box;
-                            "
+                        <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"
+                            style="width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: #141b2b; color: #e0e6f0; font-size: 14px; outline: none; box-sizing: border-box;"
                             onfocus="this.style.borderColor='rgba(46,204,113,0.5)'"
-                            onblur="this.style.borderColor='rgba(255,255,255,0.1)'"
-                        >
+                            onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
                     </div>
 
-                    <button 
-                        id="loginBtn"
-                        style="
-                            width: 100%;
-                            padding: 13px;
-                            border-radius: 10px;
-                            border: none;
-                            background: linear-gradient(135deg, #2ecc71, #27ae60);
-                            color: white;
-                            font-size: 14px;
-                            font-weight: 600;
-                            cursor: pointer;
-                            transition: transform 0.15s, box-shadow 0.15s;
-                            box-shadow: 0 4px 14px rgba(46,204,113,0.3);
-                        "
-                        onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 18px rgba(46,204,113,0.4)'"
-                        onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 14px rgba(46,204,113,0.3)'"
-                    >
+                    <button id="loginBtn"
+                        style="width: 100%; padding: 13px; border-radius: 10px; border: none; background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(46,204,113,0.3);">
                         Anmelden
                     </button>
 
-                    <div id="loginError" style="
-                        color: #e74c3c;
-                        font-size: 12px;
-                        margin-top: 14px;
-                        min-height: 16px;
-                        text-align: center;
-                    "></div>
+                    <div id="loginError" style="color: #e74c3c; font-size: 12px; margin-top: 14px; min-height: 16px; text-align: center;"></div>
                 </div>
             `;
 
             document.body.appendChild(overlay);
-
             setTimeout(() => document.getElementById('loginUser').focus(), 100);
-
             overlay.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') doLogin();
             });
-
             document.getElementById('loginBtn').addEventListener('click', doLogin);
         });
 
@@ -183,7 +117,12 @@
                 document.getElementById('loginOverlay').style.display = 'none';
                 console.log('✅ Eingeloggt als:', user);
 
-                loadAppScripts();
+                // 🔥 Scripts NACHEINANDER laden (mit korrekter Reihenfolge)
+                loadScript('https://cdnjs.cloudflare.com/ajax/libs/fflate/0.8.2/fflate.min.js', function() {
+                    loadScript('https://sql.js.org/dist/sql-wasm.js', function() {
+                        loadAppModules();
+                    });
+                });
             } else {
                 err.textContent = '❌ Falsches Passwort';
                 document.getElementById('loginPass').value = '';
@@ -191,7 +130,16 @@
             }
         };
 
-        function loadAppScripts() {
+        // 🔥 Helper: Script sequenziell laden
+        function loadScript(src, callback) {
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = callback;
+            document.head.appendChild(script);
+        }
+
+        // 🔥 App-Module NACHEINANDER laden
+        function loadAppModules() {
             const modules = [
                 'js/modules/sidebar.js',
                 'js/modules/ranking.js',
@@ -203,22 +151,35 @@
                 'js/app.js'
             ];
 
-            let loaded = 0;
-            modules.forEach(function(src) {
+            let index = 0;
+            function loadNext() {
+                if (index >= modules.length) {
+                    setTimeout(function() {
+                        const event = new Event('DOMContentLoaded');
+                        document.dispatchEvent(event);
+                        console.log('🚀 App gestartet');
+                    }, 100);
+                    return;
+                }
                 const script = document.createElement('script');
-                script.src = src;
-                script.defer = true;
+                script.src = modules[index];
                 script.onload = function() {
-                    loaded++;
-                    if (loaded === modules.length) {
-                        setTimeout(function() {
-                            const event = new Event('DOMContentLoaded');
-                            document.dispatchEvent(event);
-                            console.log('🚀 App gestartet');
-                        }, 100);
-                    }
+                    index++;
+                    loadNext();
                 };
                 document.head.appendChild(script);
+            }
+            loadNext();
+        }
+
+        // 🔥 Wenn schon eingeloggt (Session), direkt Scripts laden
+        if (window.__loggedIn) {
+            document.addEventListener('DOMContentLoaded', function() {
+                loadScript('https://cdnjs.cloudflare.com/ajax/libs/fflate/0.8.2/fflate.min.js', function() {
+                    loadScript('https://sql.js.org/dist/sql-wasm.js', function() {
+                        loadAppModules();
+                    });
+                });
             });
         }
     })();
