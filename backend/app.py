@@ -786,12 +786,12 @@ def get_tournaments():
         return jsonify([])
 
 # ============================================================
-# MATCHES VON SPORTSCORE API (Backend-Proxy)
+# MATCHES VON TENNISEXPLORER (Backend-Proxy)
 # ============================================================
 
 @app.route('/api/live-matches', methods=['GET'])
 def get_live_matches():
-    """Holt Matches von TennisExplorer Results (Sieger per 'first time' + höchste Sätze)"""
+    """Holt Matches von TennisExplorer Results"""
 
     try:
         print("📡 Lade Matches von TennisExplorer Results...")
@@ -823,28 +823,32 @@ def get_live_matches():
             return jsonify([])
 
         biggest = max(all_tables, key=len)
-        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', biggest, re.DOTALL)
+
+        # 🔥 WICHTIG: attrs UND content separat extrahieren
+        tr_matches = re.findall(r'<tr([^>]*)>(.*?)</tr>', biggest, re.DOTALL)
+        rows = []
+        for attrs, content in tr_matches:
+            rows.append({
+                'attrs': attrs,
+                'content': content
+            })
 
         matches = []
         current_tourney = 'Match'
 
-        # Wir sammeln Spieler-Zeilen pro Match (2 aufeinanderfolgende)
-        # Ein Match startet, wenn eine Zeile "first time" enthält
         i = 0
         while i < len(rows) and len(matches) < 12:
             row = rows[i]
 
-            # Turnier-Header?
-            if 'class="head' in row:
-                # Suche den Turnier-Link 
+            # Turnier-Header? (Prüfe attrs!)
+            if 'head' in row['attrs']:
                 tourney_match = re.search(
                     r'<a[^>]*href="/([^/"]+)/\d{4}/[^"]*"[^>]*>(.*?)</a>',
-                    row, re.DOTALL
+                    row['content'], re.DOTALL
                 )
                 if tourney_match:
                     url_part = tourney_match.group(1)
                     link_html = tourney_match.group(2)
-                    # Entferne HTML-Tags aus dem Link-Text
                     link_text = re.sub(r'<[^>]+>', '', link_html).strip()
                     link_text = re.sub(r'&nbsp;', '', link_text).strip()
 
@@ -852,23 +856,22 @@ def get_live_matches():
                         current_tourney = link_text
                     else:
                         current_tourney = url_part.replace('-', ' ').title()
-                
+
                 i += 1
                 continue
 
-            # Spieler-Zeile?
+            # Spieler-Zeile? (Prüfe content!)
             player_match = re.search(
                 r'<td[^>]*class="t-name"[^>]*>.*?<a[^>]*href="/player/[^"]*"[^>]*>([^<]+)</a>',
-                row, re.DOTALL
+                row['content'], re.DOTALL
             )
             if not player_match:
                 i += 1
                 continue
 
-            # Prüfen ob das eine Sieger-Zeile ist (hat "first time")
-            is_first_row = 'class="first time"' in row or 'class="first' in row
+            # Prüfen ob das eine Sieger-Zeile ist (hat "first time" im content)
+            is_first_row = 'first time' in row['content']
 
-            # Wenn NICHT first row, aber wir haben noch keine pending → skip
             if not is_first_row:
                 i += 1
                 continue
@@ -877,15 +880,15 @@ def get_live_matches():
             player1 = player_match.group(1).strip()
 
             # Zeit
-            time_match = re.search(r'<td[^>]*class="first time"[^>]*>([^<]+)</td>', row)
+            time_match = re.search(r'<td[^>]*class="first time"[^>]*>([^<]+)</td>', row['content'])
             time_str = time_match.group(1).strip() if time_match else ''
 
             # Sätze Sieger
-            result1_match = re.search(r'<td[^>]*class="result"[^>]*>(\d+)</td>', row)
+            result1_match = re.search(r'<td[^>]*class="result"[^>]*>(\d+)</td>', row['content'])
             sets1 = int(result1_match.group(1)) if result1_match else 0
 
             # Satz-Scores Sieger
-            score_cells1 = re.findall(r'<td[^>]*class="score"[^>]*>(.*?)</td>', row, re.DOTALL)
+            score_cells1 = re.findall(r'<td[^>]*class="score"[^>]*>(.*?)</td>', row['content'], re.DOTALL)
             scores1 = []
             for s in score_cells1:
                 clean = re.sub(r'<[^>]+>', '', s).strip()
@@ -900,7 +903,7 @@ def get_live_matches():
             row2 = rows[i + 1]
             player2_match = re.search(
                 r'<td[^>]*class="t-name"[^>]*>.*?<a[^>]*href="/player/[^"]*"[^>]*>([^<]+)</a>',
-                row2, re.DOTALL
+                row2['content'], re.DOTALL
             )
             if not player2_match:
                 i += 1
@@ -909,7 +912,7 @@ def get_live_matches():
             player2 = player2_match.group(1).strip()
 
             # Satz-Scores Verlierer
-            score_cells2 = re.findall(r'<td[^>]*class="score"[^>]*>(.*?)</td>', row2, re.DOTALL)
+            score_cells2 = re.findall(r'<td[^>]*class="score"[^>]*>(.*?)</td>', row2['content'], re.DOTALL)
             scores2 = []
             for s in score_cells2:
                 clean = re.sub(r'<[^>]+>', '', s).strip()
@@ -918,12 +921,11 @@ def get_live_matches():
                     scores2.append(clean)
 
             # Sätze Verlierer
-            result2_match = re.search(r'<td[^>]*class="result"[^>]*>(\d+)</td>', row2)
+            result2_match = re.search(r'<td[^>]*class="result"[^>]*>(\d+)</td>', row2['content'])
             sets2 = int(result2_match.group(1)) if result2_match else 0
 
             # Sieger bestimmen: höhere Sätze
             if sets2 > sets1:
-                # Verlierer ist tatsächlich Sieger → tauschen
                 player1, player2 = player2, player1
                 scores1, scores2 = scores2, scores1
                 sets1, sets2 = sets2, sets1
@@ -935,7 +937,7 @@ def get_live_matches():
 
             score_str = ' '.join(combined) if combined else '—'
 
-            # 🔥 Datum + Uhrzeit kombinieren
+            # Datum + Uhrzeit kombinieren
             from datetime import datetime
             today = datetime.now().strftime('%Y-%m-%d')
             time_full = f"{today}T{time_str}:00" if time_str else today
@@ -953,7 +955,7 @@ def get_live_matches():
                 'tour': 'ATP'
             })
 
-            i += 2  # Skip die Verlierer-Zeile
+            i += 2
 
         print(f"✅ {len(matches)} Matches fertig")
         return jsonify(matches)
@@ -964,55 +966,6 @@ def get_live_matches():
         traceback.print_exc()
         return jsonify([])
 
-
-@app.route('/api/debug-headers', methods=['GET'])
-def debug_headers():
-    """Zeigt Header-Zeilen der Tabelle"""
-    try:
-        response = requests.get(
-            'https://www.tennisexplorer.com/results/?type=atp-single',
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'text/html'
-            },
-            timeout=15
-        )
-        html = response.text
-        
-        # Größte Tabelle finden
-        all_tables = []
-        search_pos = 0
-        while True:
-            ts = html.find('<table class="result', search_pos)
-            if ts == -1: break
-            te = html.find('</table>', ts)
-            if te != -1:
-                all_tables.append(html[ts:te+8])
-            search_pos = ts + 20
-        
-        biggest = max(all_tables, key=len)
-        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', biggest, re.DOTALL)
-        
-        # Alle Zeilen mit 'head' finden
-        headers = []
-        for row in rows:
-            if 'head' in row[:200]:  # Suche im Anfang der Zeile
-                headers.append({
-                    'has_head_string': 'class="head' in row,
-                    'first_500': row[:500]
-                })
-        
-        # Zusätzlich: Alle einzigartigen class-Attribute der <tr>-Tags
-        tr_classes = re.findall(r'<tr[^>]*class="([^"]*)"', biggest)
-        
-        return jsonify({
-            'total_rows': len(rows),
-            'header_rows': len(headers),
-            'tr_classes_unique': list(set(tr_classes)),
-            'header_samples': headers[:5]
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)})
 
 
 # ============================================================
