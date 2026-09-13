@@ -969,7 +969,36 @@ function renderPlayerList(players, title, totalPlayers) {
         </div>
     `;
 
-    container.innerHTML = html;
+        container.innerHTML = html;
+
+    // 🔥 NACH dem Rendern: Fehlende Bilder nachladen
+    players.forEach(async (p) => {
+        if (!p.wikidata_id) return;
+        
+        const cacheKey = 'wikidata_img_' + p.wikidata_id;
+        let imageUrl = null;
+        
+        // Prüfen ob im Cache
+        try {
+            const cached = localStorage.getItem(cacheKey);
+            if (cached && cached !== 'null' && cached !== 'undefined') {
+                imageUrl = cached;
+            }
+        } catch (e) {}
+        
+        // Nur laden wenn noch nicht im Cache
+        if (!imageUrl) {
+            imageUrl = await getPlayerImage(p.wikidata_id);
+        }
+        
+        // Falls Bild gefunden → Avatar aktualisieren
+        if (imageUrl) {
+            const avatarEl = document.getElementById('avatar_' + p.player_id);
+            if (avatarEl) {
+                avatarEl.innerHTML = `<img src="${imageUrl}" alt="${p.name}" loading="lazy" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">`;
+            }
+        }
+    });
 }
 
 function buildPlayerList(players) {
@@ -998,24 +1027,28 @@ function buildPlayerList(players) {
         const rankBg = rank === 1 ? 'rgba(212,175,55,0.15)' : rank === 2 ? 'rgba(192,192,192,0.15)' : rank === 3 ? 'rgba(205,127,50,0.15)' : 'rgba(255,255,255,0.03)';
         const rankBorder = rank === 1 ? 'rgba(212,175,55,0.3)' : rank === 2 ? 'rgba(192,192,192,0.3)' : rank === 3 ? 'rgba(205,127,50,0.3)' : 'rgba(255,255,255,0.06)';
 
+        const avatarId = 'avatar_' + p.player_id;
+
         let avatarHtml;
         if (hasImage) {
             avatarHtml = `
-                <div style="width:56px;height:56px;border-radius:50%;overflow:hidden;flex-shrink:0;border:2px solid ${rankColor};cursor:pointer;"
-                     onclick="event.stopPropagation();openLightbox('${imageUrl}','${p.name}')"
-                     onmouseover="this.style.transform='scale(1.05)'"
-                     onmouseout="this.style.transform='scale(1)'">
+                <div id="${avatarId}" style="width:56px;height:56px;border-radius:50%;overflow:hidden;flex-shrink:0;border:2px solid ${rankColor};cursor:pointer;"
+                    onclick="event.stopPropagation();openLightbox('${imageUrl}','${p.name}')"
+                    onmouseover="this.style.transform='scale(1.05)'"
+                    onmouseout="this.style.transform='scale(1)'">
                     <img src="${imageUrl}" alt="${p.name}" loading="lazy" style="width:100%;height:100%;object-fit:cover;"
-                         onerror="this.style.display='none';this.parentElement.style.border='none';this.parentElement.innerHTML='<div style=\\'width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#1a472a,#2d5a3d);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;color:#fff;\\'>${initials}</div>'">
+                        onerror="this.style.display='none';this.parentElement.style.border='none';this.parentElement.innerHTML='<div style=\\'width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#1a472a,#2d5a3d);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;color:#fff;\\'>${initials}</div>'">
                 </div>
             `;
         } else {
             avatarHtml = `
-                <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#1a472a,#2d5a3d);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;color:#fff;flex-shrink:0;border:2px solid ${rankColor};">
+                <div id="${avatarId}" style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#1a472a,#2d5a3d);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;color:#fff;flex-shrink:0;border:2px solid ${rankColor};overflow:hidden;">
                     ${initials}
                 </div>
             `;
         }
+
+
 
         htmlParts.push(`
             <div style="background:${rankBg};border:1px solid ${rankBorder};border-radius:16px;padding:16px 20px;transition:0.25s;cursor:pointer;position:relative;overflow:hidden;"
