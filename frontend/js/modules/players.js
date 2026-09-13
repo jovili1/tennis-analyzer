@@ -969,15 +969,15 @@ function renderPlayerList(players, title, totalPlayers) {
         </div>
     `;
 
-        container.innerHTML = html;
+    container.innerHTML = html;
 
     // 🔥 NACH dem Rendern: Fehlende Bilder nachladen
     players.forEach(async (p) => {
         if (!p.wikidata_id) return;
-        
+
         const cacheKey = 'wikidata_img_' + p.wikidata_id;
         let imageUrl = null;
-        
+
         // Prüfen ob im Cache
         try {
             const cached = localStorage.getItem(cacheKey);
@@ -985,12 +985,12 @@ function renderPlayerList(players, title, totalPlayers) {
                 imageUrl = cached;
             }
         } catch (e) {}
-        
+
         // Nur laden wenn noch nicht im Cache
         if (!imageUrl) {
             imageUrl = await getPlayerImage(p.wikidata_id);
         }
-        
+
         // Falls Bild gefunden → Avatar aktualisieren
         if (imageUrl) {
             const avatarEl = document.getElementById('avatar_' + p.player_id);
@@ -1047,8 +1047,6 @@ function buildPlayerList(players) {
                 </div>
             `;
         }
-
-
 
         htmlParts.push(`
             <div style="background:${rankBg};border:1px solid ${rankBorder};border-radius:16px;padding:16px 20px;transition:0.25s;cursor:pointer;position:relative;overflow:hidden;"
@@ -1399,25 +1397,25 @@ function handleSearch() {
             const container = document.getElementById('playerContainer');
             if (container) {
                 container.innerHTML = buildPlayerList(cleanedResults);
-                
+
                 // 🔥 Bilder für Suchergebnisse nachladen
                 cleanedResults.forEach(async (p) => {
                     if (!p.wikidata_id) return;
-                    
+
                     const cacheKey = 'wikidata_img_' + p.wikidata_id;
                     let imageUrl = null;
-                    
+
                     try {
                         const cached = localStorage.getItem(cacheKey);
                         if (cached && cached !== 'null' && cached !== 'undefined') {
                             imageUrl = cached;
                         }
                     } catch (e) {}
-                    
+
                     if (!imageUrl) {
                         imageUrl = await getPlayerImage(p.wikidata_id);
                     }
-                    
+
                     if (imageUrl) {
                         const avatarEl = document.getElementById('avatar_' + p.player_id);
                         if (avatarEl) {
