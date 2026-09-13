@@ -1399,6 +1399,32 @@ function handleSearch() {
             const container = document.getElementById('playerContainer');
             if (container) {
                 container.innerHTML = buildPlayerList(cleanedResults);
+                
+                // 🔥 Bilder für Suchergebnisse nachladen
+                cleanedResults.forEach(async (p) => {
+                    if (!p.wikidata_id) return;
+                    
+                    const cacheKey = 'wikidata_img_' + p.wikidata_id;
+                    let imageUrl = null;
+                    
+                    try {
+                        const cached = localStorage.getItem(cacheKey);
+                        if (cached && cached !== 'null' && cached !== 'undefined') {
+                            imageUrl = cached;
+                        }
+                    } catch (e) {}
+                    
+                    if (!imageUrl) {
+                        imageUrl = await getPlayerImage(p.wikidata_id);
+                    }
+                    
+                    if (imageUrl) {
+                        const avatarEl = document.getElementById('avatar_' + p.player_id);
+                        if (avatarEl) {
+                            avatarEl.innerHTML = `<img src="${imageUrl}" alt="${p.name}" loading="lazy" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">`;
+                        }
+                    }
+                });
             }
 
             const countEl = document.getElementById('resultCount');
