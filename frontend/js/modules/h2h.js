@@ -343,7 +343,6 @@ window.clearPlayer2 = function() {
     document.getElementById('h2hStats').innerHTML = '';
 };
 
-// ===== SWITCH H2H TYPE =====
 async function switchH2HType(type) {
     h2hState.type = type;
     h2hState.player1 = null;
@@ -354,7 +353,11 @@ async function switchH2HType(type) {
     h2hState.players = [];
     h2hState.matchDb = null;
 
-    await loadPlayers(type);
+    // 🔥 FIX: Spieler LADEN und SPEICHERN!
+    const players = await loadPlayers(type);
+    h2hState.players = players;
+    console.log(`✅ ${players.length} Spieler in h2hState gespeichert (${type.toUpperCase()})`);
+
     renderH2H();
 }
 
@@ -1093,9 +1096,12 @@ window.loadH2H = async function() {
     h2hState.searchTerm2 = '';
     h2hState.cacheLoaded = false;
     h2hState.players = [];
-    h2hState.matchDb = null;
 
-    await loadPlayers(h2hState.type);
+    // 🔥 FIX: Spieler LADEN und SPEICHERN!
+    const players = await loadPlayers(h2hState.type);
+    h2hState.players = players;   // ← DAS FEHLTE!
+    console.log(`✅ ${players.length} Spieler in h2hState gespeichert`);
+
     renderH2H();
 };
 
