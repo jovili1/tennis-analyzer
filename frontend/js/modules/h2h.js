@@ -231,6 +231,7 @@ function renderH2H() {
 
 // ===== H2H SEARCH =====
 let h2hSearchTimeout = { 1: null, 2: null };
+
 async function doH2HSearch(player, term) {
     if (h2hSearchTimeout[player]) {
         clearTimeout(h2hSearchTimeout[player]);
@@ -251,8 +252,9 @@ async function doH2HSearch(player, term) {
         const tasks = [];
         for (const p of found) {
             const imgId = 'h2h_img_' + p.player_id;
-            const safeName = p.name.replace(/'/g, "\\'");
-            html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;cursor:pointer;transition:0.15s;border-bottom:1px solid rgba(255,255,255,0.03);" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'" onclick="selectH2HPlayer(${player}, '${safeName}')">
+            // 🔥 data-Attribute statt inline onclick (robuster!)
+            const escapedName = p.name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            html += `<div class="h2h-result-item" data-player="${player}" data-name="${escapedName}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;cursor:pointer;transition:0.15s;border-bottom:1px solid rgba(255,255,255,0.03);" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
                 <div style="display:flex;align-items:center;gap:10px;">
                     <div id="${imgId}" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#1a472a,#2d5a3d);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;color:#fff;flex-shrink:0;">${p.name.split(' ').map(w=>w[0]).join('').substring(0,2)}</div>
                     <span style="color:#e0e6f0;font-size:13px;">${p.name}</span>
@@ -262,6 +264,22 @@ async function doH2HSearch(player, term) {
         }
         container.innerHTML = html;
         container.style.display = 'block';
+
+        // 🔥 Click-Handler per JS (zuverlässig!)
+        container.querySelectorAll('.h2h-result-item').forEach(function(item) {
+            item.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const playerNum = parseInt(this.dataset.player);
+                const name = this.dataset.name;
+                console.log('🎯 Klick auf H2H-Spieler:', playerNum, name);
+                if (typeof window.selectH2HPlayer === 'function') {
+                    window.selectH2HPlayer(playerNum, name);
+                } else {
+                    console.error('❌ selectH2HPlayer nicht gefunden!');
+                }
+            });
+        });
+
         for (const t of tasks) {
             const url = await loadImage(t.wid);
             if (url) {
