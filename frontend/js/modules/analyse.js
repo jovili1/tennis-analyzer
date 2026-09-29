@@ -12,7 +12,7 @@ window.API_URL = API_URL;
 
 var BACKEND_URL = window.BACKEND_URL || ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? '..'
-    : 'https://jovili1.github.io/tennis-analyzer');
+    : 'https://tennis-analyzer-eeru.onrender.com');
 window.BACKEND_URL = BACKEND_URL;
 
 let state = {
