@@ -607,23 +607,42 @@ function getCountryName(iocCode) {
 
 function calculateAge(dob) {
     if (!dob || dob === '—' || dob === 0) return '—';
-    const dobStr = String(dob);
-    if (dobStr.length === 8) {
+    const dobStr = String(dob).trim();
+    
+    let birthDate = null;
+    
+    // Format 1: YYYYMMDD (8 Ziffern, z.B. 19970420)
+    if (/^\d{8}$/.test(dobStr)) {
         const year = parseInt(dobStr.substring(0, 4));
         const month = parseInt(dobStr.substring(4, 6)) - 1;
         const day = parseInt(dobStr.substring(6, 8));
-        const birthDate = new Date(year, month, day);
-        if (!isNaN(birthDate.getTime())) {
-            const today = new Date();
-            let age = today.getFullYear() - birthDate.getFullYear();
-            const monthDiff = today.getMonth() - birthDate.getMonth();
-            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-                age--;
-            }
-            return String(age);
-        }
+        birthDate = new Date(year, month, day);
     }
-    return '—';
+    // Format 2: DD.MM.YYYY oder D.M.YYYY (z.B. 20.4.1997)
+    else if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(dobStr)) {
+        const parts = dobStr.split('.').map(Number);
+        birthDate = new Date(parts[2], parts[1] - 1, parts[0]);
+    }
+    // Format 3: YYYY-MM-DD (z.B. 1997-04-20)
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(dobStr)) {
+        birthDate = new Date(dobStr);
+    }
+    // Format 4: DD/MM/YYYY (z.B. 20/04/1997)
+    else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dobStr)) {
+        const parts = dobStr.split('/').map(Number);
+        birthDate = new Date(parts[2], parts[1] - 1, parts[0]);
+    }
+    
+    if (!birthDate || isNaN(birthDate.getTime())) return '—';
+    
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    
+    return String(age);
 }
 
 // =====================================================
@@ -1682,7 +1701,7 @@ function renderDetail(p) {
                 </div>
 
                 <div style="display:grid;grid-template-columns:repeat(7, 1fr);gap:10px;">
-                    ${detailTile('🎂','Geburtstag',formattedBirthDate)}
+                    ${detailTile('🎂','Geburtstag', `${formattedBirthDate} (${calculateAge(birthDate)} J.)`)}
                     ${detailTile('📅','Alter',age)}
                     ${detailTile('📏','Größe',height !== '—' ? height + ' cm' : '—')}
                     ${detailTile('⚖️','Gewicht',weight !== '—' ? weight + ' kg' : '—')}
