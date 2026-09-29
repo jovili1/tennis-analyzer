@@ -5,7 +5,7 @@ console.log('🔄 players.js wird geladen...');
 // ===== API-URL (lokal vs. online) =====
 var API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? ''
-    : 'https://tennis-analyzer-api.onrender.com';
+    : 'https://tennis-analyzer-eeru.onrender.com';
 
 var BACKEND_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? '..'
