@@ -10,7 +10,7 @@ window.globalDbWTA = null;
 window.currentRankingType = 'atp';
 
 // ===== ZIP-QUELLE (GitHub Releases) =====
-const DB_RELEASE_URL = '/backend/spieler';
+const DB_RELEASE_URL = 'https://jovili1.github.io/tennis-analyzer/dbs';
 
 // ===== ZIP-ENTPACKUNG (aus GitHub Releases) =====
 async function loadZippedDatabase(zipUrl) {
