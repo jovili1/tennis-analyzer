@@ -5576,24 +5576,47 @@ class CheckModule:
                 for idx in row_idxs:
                     if idx not in df.index:
                         continue
-                    rowid = idx + 1
-                    cur.execute(f"SELECT rowid FROM {tbl} WHERE rowid = ?",
-                                (rowid,))
-                    hit = cur.fetchone()
-                    if hit is None:
-                        key_vals = {}
-                        for kc in ("tourney_id", "tourney_date", "round",
-                                   "winner_name", "loser_name"):
-                            if kc in df.columns:
-                                key_vals[kc] = df.at[idx, kc]
-                        if not key_vals:
-                            continue
-                        where = " AND ".join(f"{k} = ?" for k in key_vals)
-                        cur.execute(f"DELETE FROM {tbl} WHERE {where}",
-                                    list(key_vals.values()))
+
+                    # 🔥 FIX: Löschen über Key-Spalten statt über rowid
+                    key_cols = ["tourney_id", "tourney_date", "round",
+                                "winner_name", "loser_name"]
+                    key_vals = {}
+                    for kc in key_cols:
+                        if kc in df.columns:
+                            val = df.at[idx, kc]
+                            try:
+                                import pandas as pd
+                                if pd.isna(val):
+                                    val = None
+                            except Exception:
+                                pass
+                            try:
+                                if hasattr(val, "item"):
+                                    val = val.item()
+                            except Exception:
+                                pass
+                            key_vals[kc] = val
+
+                    if not key_vals:
+                        continue
+
+                    where_parts = []
+                    where_vals = []
+                    for kc, val in key_vals.items():
+                        if val is None:
+                            where_parts.append(f"{kc} IS NULL")
+                        else:
+                            where_parts.append(f"{kc} = ?")
+                            where_vals.append(val)
+
+                    where_sql = " AND ".join(where_parts)
+                    cur.execute(f"DELETE FROM {tbl} WHERE {where_sql}", where_vals)
+
+                    if cur.rowcount == 0:
+                        print(f"⚠️ Zeile {idx}: NICHTS gelöscht mit {key_vals}")
                     else:
-                        cur.execute(f"DELETE FROM {tbl} WHERE rowid = ?",
-                                    (rowid,))
+                        print(f"✅ Zeile {idx}: {cur.rowcount} Zeile(n) gelöscht")
+
                 con.commit()
             except Exception:
                 try:
